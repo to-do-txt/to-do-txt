@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DropDotTxt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
+</head>
+<body class="bg-[#1e1e1e] text-gray-200 font-sans h-screen flex flex-col">
+
+    <div id="loginOverlay" class="fixed inset-0 bg-[#1e1e1e] z-50 flex items-center justify-center hidden">
+        <div class="text-center bg-[#252525] p-10 rounded-2xl border border-gray-800 shadow-2xl">
+            <div class="text-4xl mb-4">🗂️</div>
+            <h1 class="text-3xl font-bold mb-2 text-white">DropDotTxt</h1>
+            <p class="text-gray-400 mb-8 px-4">Your todo.txt web client.</p>
+            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all">
+                Connect Dropbox
+            </button>
+        </div>
+    </div>
+
+    <header class="p-4 bg-[#252525] border-b border-[#333]">
+        <div class="max-w-5xl mx-auto flex items-center gap-6">
+            <div class="font-bold text-xl text-blue-400 tracking-tight">DropDotTxt</div>
+            <div class="flex-1 flex gap-2">
+                <input type="text" id="newTodo" placeholder="Add task: (A) Buy milk +Grocery @Store" 
+                       class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm">Add</button>
+            </div>
+            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-gray-300">Logout</button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
+        <aside class="w-64 p-6 hidden md:block overflow-y-auto border-r border-[#333]">
+            <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
+            <div id="projectList" class="space-y-1 mb-8 text-sm font-medium"></div>
+            <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
+            <div id="contextList" class="space-y-1 text-sm font-medium"></div>
+        </aside>
+        <main class="flex-1 p-6 overflow-y-auto">
+            <div id="todoList" class="space-y-1"></div>
+        </main>
+    </div>
+
+    <script>
+        // CHANGE THIS TO YOUR APP KEY
+        const CLIENT_ID = 'aqxrpwdf3f2l9hx'; 
+        
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
+        const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
+        let dbx;
+        let allTasks = [];
+
+        async function init() {
+            const code = new URLSearchParams(window.location.search).get('code');
+            if (code) {
+                const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
+                sessionStorage.setItem('dbx_token', resp.result.access_token);
+                window.history.replaceState({}, document.title, REDIRECT_URI);
+                startApp(resp.result.access_token);
+            } else if (sessionStorage.getItem('dbx_token')) {
+                startApp(sessionStorage.getItem('dbx_token'));
+            } else {
+                document.getElementById('loginOverlay').classList.remove('hidden');
+            }
+        }
+
+        async function doLogin() { window.location.href = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true); }
+        function doLogout() { sessionStorage.removeItem('dbx_token'); window.location.reload(); }
+        function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
+
+        async function loadTasks() {
+            try {
+                const response = await dbx.filesDownload({ path: '/todo.txt' });
+                const text = await response.result.fileBlob.text();
+                allTasks = text.split('\n').filter(t => t.trim());
+                render();
+            } catch (e) {
+                allTasks = ["(A) Welcome to DropDotTxt!"];
+                render();
+            }
+        }
+
+        async function saveTasks() {
+            await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: { ".tag": "overwrite" } });
+            render();
+        }
+
+        function addTask() {
+            const input = document.getElementById('newTodo');
+            if (!input.value) return;
+            allTasks.push(input.value);
+            input.value = "";
+            saveTasks();
+        }
+
+        function deleteTask(index) {
+            allTasks.splice(index, 1);
+            saveTasks();
+        }
+
+        function render() {
+            const list = document.getElementById('todoList');
+            allTasks.sort();
+            list.innerHTML = allTasks.map((t, i) => {
+                let color = "border-l-blue-500";
+                if(t.startsWith("(A)")) color = "border-l-red-500 text-red-400";
+                if(t.startsWith("(B)")) color = "border-l-orange-400 text-orange-300";
+                return `<div class="group flex items-center bg-[#252525] border-l-4 ${color} mb-1 p-3 shadow-sm hover:bg-[#2a2a2a]">
+                    <span class="flex-1 text-sm">${t}</span>
+                    <button onclick="deleteTask(${i})" class="text-gray-600 group-hover:text-red-500 px-2 transition">✕</button>
+                </div>`;
+            }).join('');
+            
+            const text = allTasks.join(' ');
+            const projects = [...new Set(text.match(/\+\w+/g))];
+            const contexts = [...new Set(text.match(/@\w+/g))];
+            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div class="text-blue-400 py-1">${p}</div>`).join('');
+            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div class="text-green-400 py-1">${c}</div>`).join('');
+        }
+
+        init();
+    </script>
+</body>
+</html>
