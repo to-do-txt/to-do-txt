@@ -9,6 +9,10 @@
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
+    <div class="fixed bottom-2 right-4 text-[10px] text-gray-600 font-mono z-50">
+        v1.0.4-stable
+    </div>
+
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 shadow-2xl">
             <h1 class="text-3xl font-bold mb-2 text-blue-500">DropDotTxt</h1>
@@ -39,9 +43,8 @@
         </aside>
 
         <main class="flex-1 p-6 overflow-y-auto bg-[#121212]">
-            <div id="todoList" class="space-y-1 max-w-4xl mx-auto">
-                </div>
-            <div id="status" class="text-center text-[10px] text-gray-600 mt-4 uppercase tracking-tighter"></div>
+            <div id="todoList" class="space-y-1 max-w-4xl mx-auto"></div>
+            <div id="status" class="text-center text-[10px] text-gray-600 mt-4 uppercase tracking-tighter h-4"></div>
         </main>
     </div>
 
@@ -98,41 +101,41 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
             } catch (e) {
-                // If file doesn't exist, we start with a helpful hint
                 allTasks = ["(A) App Connected! Type a task above and hit enter to sync."];
                 render();
             }
         }
 
         async function saveTasks() {
-            const status = document.getElementById('status');
-            status.innerText = "Syncing with Dropbox...";
+            const statusBox = document.getElementById('status');
+            statusBox.innerText = "Syncing...";
             
             try {
                 const content = allTasks.join('\n');
+                // We use a text blob to ensure the file is created correctly
                 await dbx.filesUpload({ 
                     path: '/todo.txt', 
-                    contents: new Blob([content], { type: 'text/plain' }), 
-                    mode: { ".tag": "overwrite" } 
+                    contents: content, 
+                    mode: { ".tag": "overwrite" },
+                    mute: true
                 });
-                status.innerText = "All changes saved";
-                setTimeout(() => { status.innerText = ""; }, 2000);
+                statusBox.innerText = "Changes synced to Dropbox";
+                setTimeout(() => { statusBox.innerText = ""; }, 2000);
             } catch (error) {
-                console.error(error);
-                status.innerText = "Error saving. Try logging out and back in.";
+                console.error("Save Error:", error);
+                statusBox.innerText = "Error syncing changes.";
             }
         }
 
         function addTask() {
             const input = document.getElementById('newTodo');
-            if (!input.value.trim()) return;
+            const val = input.value.trim();
+            if (!val) return;
             
-            // Remove the default hint if it's still there
-            if (allTasks.length === 1 && allTasks[0].includes("App Connected!")) {
-                allTasks = [];
-            }
+            // Clean up hints
+            if (allTasks.length === 1 && allTasks[0].includes("App Connected")) allTasks = [];
 
-            allTasks.push(input.value.trim());
+            allTasks.push(val);
             input.value = "";
             render();
             saveTasks();
@@ -154,11 +157,10 @@
 
                 return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 shadow-sm hover:bg-[#252525]">
                     <span class="flex-1 text-sm font-medium tracking-wide">${t}</span>
-                    <button onclick="deleteTask(${index = i})" class="text-gray-600 group-hover:text-red-500 px-3 transition-colors text-lg">✕</button>
+                    <button onclick="deleteTask(${i})" class="text-gray-600 group-hover:text-red-500 px-3 transition-colors">✕</button>
                 </div>`;
             }).join('');
             
-            // Update Sidebar
             const text = allTasks.join(' ');
             const projects = [...new Set(text.match(/\+\w+/g))];
             const contexts = [...new Set(text.match(/@\w+/g))];
