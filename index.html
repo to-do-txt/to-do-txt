@@ -7,48 +7,47 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
 </head>
-<body class="bg-[#1e1e1e] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
+<body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
-    <div id="loginOverlay" class="fixed inset-0 bg-[#1e1e1e] z-50 flex items-center justify-center hidden">
-        <div class="text-center bg-[#252525] p-10 rounded-2xl border border-gray-800 shadow-2xl">
-            <h1 class="text-3xl font-bold mb-2 text-blue-400">DropDotTxt</h1>
-            <p class="text-gray-400 mb-8">Connect to sync your todo.txt</p>
-            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all">
+    <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
+        <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 shadow-2xl">
+            <h1 class="text-3xl font-bold mb-2 text-blue-500">DropDotTxt</h1>
+            <p class="text-gray-400 mb-8">Sync your todo.txt to Dropbox</p>
+            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all transform hover:scale-105">
                 Connect Dropbox
             </button>
         </div>
     </div>
 
-    <header class="p-4 bg-[#252525] border-b border-[#333] shadow-lg">
+    <header class="p-4 bg-[#1e1e1e] border-b border-[#333]">
         <div class="max-w-5xl mx-auto flex items-center gap-6">
-            <div class="font-bold text-xl text-blue-400 tracking-tight">DropDotTxt</div>
+            <div class="font-bold text-xl text-blue-500 tracking-tight">DropDotTxt</div>
             <div class="flex-1 flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
-                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm transition-colors">Add</button>
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task: (A) Get coffee +Personal @Morning" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm transition-all">
+                <button id="addBtn" onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-colors whitespace-nowrap">Add Task</button>
             </div>
             <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400">Logout</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
-        <aside class="w-64 p-6 hidden md:block overflow-y-auto border-r border-[#333] bg-[#1a1a1a]">
+        <aside class="w-64 p-6 hidden md:block overflow-y-auto border-r border-[#333] bg-[#121212]">
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
             <div id="projectList" class="space-y-1 mb-8 text-sm font-medium text-blue-400"></div>
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
             <div id="contextList" class="space-y-1 text-sm font-medium text-green-400"></div>
         </aside>
-        <main class="flex-1 p-6 overflow-y-auto bg-[#1e1e1e]">
+
+        <main class="flex-1 p-6 overflow-y-auto bg-[#121212]">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto">
-                <div id="loadingState" class="text-center text-gray-600 mt-10 italic">Waking up...</div>
-            </div>
+                </div>
+            <div id="status" class="text-center text-[10px] text-gray-600 mt-4 uppercase tracking-tighter"></div>
         </main>
     </div>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx'; 
         const REDIRECT_URI = window.location.origin + window.location.pathname;
-        
-        // This is key: We must use a consistent Auth instance for PKCE
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx;
         let allTasks = [];
@@ -56,42 +55,28 @@
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
-            const cachedToken = localStorage.getItem('dbx_token');
+            const token = localStorage.getItem('dbx_token');
 
-            if (cachedToken) {
+            if (token) {
                 if (code) window.history.replaceState({}, document.title, REDIRECT_URI);
-                startApp(cachedToken);
-                return;
-            }
-
-            if (code) {
+                startApp(token);
+            } else if (code) {
                 try {
-                    // Recover the PKCE verifier from storage
                     const verifier = localStorage.getItem('dbx_verifier');
                     dbxAuth.setCodeVerifier(verifier);
-                    
-                    const response = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
-                    const token = response.result.access_token;
-                    
-                    localStorage.setItem('dbx_token', token);
+                    const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
+                    localStorage.setItem('dbx_token', resp.result.access_token);
                     localStorage.removeItem('dbx_verifier');
-                    window.location.href = REDIRECT_URI; 
-                } catch (error) {
-                    console.error("Exchange Error:", error);
-                    alert("Auth error. Please try clicking Connect again.");
-                    doLogout();
-                }
+                    window.location.href = REDIRECT_URI;
+                } catch (e) { doLogout(); }
             } else {
                 document.getElementById('loginOverlay').classList.remove('hidden');
-                document.getElementById('loadingState').classList.add('hidden');
             }
         }
 
         async function doLogin() {
             localStorage.removeItem('dbx_token');
             const authUrl = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true);
-            
-            // Save the PKCE verifier before we leave the page!
             localStorage.setItem('dbx_verifier', dbxAuth.getCodeVerifier());
             window.location.href = authUrl;
         }
@@ -113,27 +98,40 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
             } catch (e) {
-                allTasks = ["(A) App Connected! Add a task to create your todo.txt file."];
+                // If file doesn't exist, we start with a helpful hint
+                allTasks = ["(A) App Connected! Type a task above and hit enter to sync."];
                 render();
             }
         }
 
         async function saveTasks() {
+            const status = document.getElementById('status');
+            status.innerText = "Syncing with Dropbox...";
+            
             try {
                 const content = allTasks.join('\n');
                 await dbx.filesUpload({ 
                     path: '/todo.txt', 
-                    contents: content, 
+                    contents: new Blob([content], { type: 'text/plain' }), 
                     mode: { ".tag": "overwrite" } 
                 });
+                status.innerText = "All changes saved";
+                setTimeout(() => { status.innerText = ""; }, 2000);
             } catch (error) {
-                console.error("Save failed", error);
+                console.error(error);
+                status.innerText = "Error saving. Try logging out and back in.";
             }
         }
 
         function addTask() {
             const input = document.getElementById('newTodo');
             if (!input.value.trim()) return;
+            
+            // Remove the default hint if it's still there
+            if (allTasks.length === 1 && allTasks[0].includes("App Connected!")) {
+                allTasks = [];
+            }
+
             allTasks.push(input.value.trim());
             input.value = "";
             render();
@@ -148,14 +146,19 @@
 
         function render() {
             const list = document.getElementById('todoList');
-            document.getElementById('loadingState').classList.add('hidden');
             allTasks.sort();
-            list.innerHTML = allTasks.map((t, i) => `
-                <div class="group flex items-center bg-[#252525] border-l-4 border-blue-600 mb-1 p-3 hover:bg-[#2d2d2d] transition-all">
-                    <span class="flex-1 text-sm">${t}</span>
-                    <button onclick="deleteTask(${i})" class="text-gray-600 hover:text-red-500 px-2 transition-colors">✕</button>
-                </div>`).join('');
+            list.innerHTML = allTasks.map((t, i) => {
+                let color = "border-l-blue-600";
+                if(t.startsWith("(A)")) color = "border-l-red-500 text-red-400";
+                if(t.startsWith("(B)")) color = "border-l-orange-400 text-orange-300";
+
+                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 shadow-sm hover:bg-[#252525]">
+                    <span class="flex-1 text-sm font-medium tracking-wide">${t}</span>
+                    <button onclick="deleteTask(${index = i})" class="text-gray-600 group-hover:text-red-500 px-3 transition-colors text-lg">✕</button>
+                </div>`;
+            }).join('');
             
+            // Update Sidebar
             const text = allTasks.join(' ');
             const projects = [...new Set(text.match(/\+\w+/g))];
             const contexts = [...new Set(text.match(/@\w+/g))];
