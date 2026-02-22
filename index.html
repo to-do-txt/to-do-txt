@@ -26,20 +26,20 @@
                 <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm transition-colors">Add</button>
             </div>
-            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</button>
+            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400">Logout</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
         <aside class="w-64 p-6 hidden md:block overflow-y-auto border-r border-[#333] bg-[#1a1a1a]">
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
-            <div id="projectList" class="space-y-1 mb-8 text-sm font-medium"></div>
+            <div id="projectList" class="space-y-1 mb-8 text-sm font-medium text-blue-400"></div>
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
-            <div id="contextList" class="space-y-1 text-sm font-medium"></div>
+            <div id="contextList" class="space-y-1 text-sm font-medium text-green-400"></div>
         </aside>
         <main class="flex-1 p-6 overflow-y-auto bg-[#1e1e1e]">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto">
-                <div id="loadingState" class="text-center text-gray-600 mt-10">Waiting for connection...</div>
+                <div id="loadingState" class="text-center text-gray-600 mt-10 italic">Waking up...</div>
             </div>
         </main>
     </div>
@@ -48,7 +48,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx'; 
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         
-        // This helper ensures we don't lose the PKCE challenge during the loop
+        // This is key: We must use a consistent Auth instance for PKCE
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx;
         let allTasks = [];
@@ -56,10 +56,9 @@
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
-            const cachedToken = localStorage.getItem('dbx_token'); // Switched to localStorage for persistence
+            const cachedToken = localStorage.getItem('dbx_token');
 
             if (cachedToken) {
-                console.log("Found cached token.");
                 if (code) window.history.replaceState({}, document.title, REDIRECT_URI);
                 startApp(cachedToken);
                 return;
@@ -67,32 +66,38 @@
 
             if (code) {
                 try {
-                    console.log("Code found, attempting swap...");
-                    // Using the Dropbox SDK's built-in exchange method
+                    // Recover the PKCE verifier from storage
+                    const verifier = localStorage.getItem('dbx_verifier');
+                    dbxAuth.setCodeVerifier(verifier);
+                    
                     const response = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
                     const token = response.result.access_token;
                     
                     localStorage.setItem('dbx_token', token);
-                    window.location.href = REDIRECT_URI; // Hard reload to clear the URL code
+                    localStorage.removeItem('dbx_verifier');
+                    window.location.href = REDIRECT_URI; 
                 } catch (error) {
-                    console.error("TOKEN EXCHANGE ERROR:", error);
-                    alert("Exchange failed: " + JSON.stringify(error));
-                    window.location.href = REDIRECT_URI;
+                    console.error("Exchange Error:", error);
+                    alert("Auth error. Please try clicking Connect again.");
+                    doLogout();
                 }
             } else {
                 document.getElementById('loginOverlay').classList.remove('hidden');
+                document.getElementById('loadingState').classList.add('hidden');
             }
         }
 
         async function doLogin() {
             localStorage.removeItem('dbx_token');
-            // This URL creation method is more robust for GitHub Pages
             const authUrl = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true);
+            
+            // Save the PKCE verifier before we leave the page!
+            localStorage.setItem('dbx_verifier', dbxAuth.getCodeVerifier());
             window.location.href = authUrl;
         }
 
         function doLogout() {
-            localStorage.removeItem('dbx_token');
+            localStorage.clear();
             window.location.href = REDIRECT_URI;
         }
 
@@ -108,7 +113,7 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
             } catch (e) {
-                allTasks = ["(A) Welcome! Sync works. Add a task to start writing to Dropbox."];
+                allTasks = ["(A) App Connected! Add a task to create your todo.txt file."];
                 render();
             }
         }
@@ -121,10 +126,8 @@
                     contents: content, 
                     mode: { ".tag": "overwrite" } 
                 });
-                console.log("Success: Written to Dropbox");
             } catch (error) {
-                console.error("SAVE ERROR:", error);
-                alert("Dropbox Write Error: " + error.status);
+                console.error("Save failed", error);
             }
         }
 
@@ -148,16 +151,16 @@
             document.getElementById('loadingState').classList.add('hidden');
             allTasks.sort();
             list.innerHTML = allTasks.map((t, i) => `
-                <div class="group flex items-center bg-[#252525] border-l-4 border-blue-600 mb-1 p-3 hover:bg-[#2d2d2d]">
-                    <span class="flex-1 text-sm font-medium">${t}</span>
+                <div class="group flex items-center bg-[#252525] border-l-4 border-blue-600 mb-1 p-3 hover:bg-[#2d2d2d] transition-all">
+                    <span class="flex-1 text-sm">${t}</span>
                     <button onclick="deleteTask(${i})" class="text-gray-600 hover:text-red-500 px-2 transition-colors">✕</button>
                 </div>`).join('');
             
             const text = allTasks.join(' ');
             const projects = [...new Set(text.match(/\+\w+/g))];
             const contexts = [...new Set(text.match(/@\w+/g))];
-            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div class="text-blue-400 py-1 cursor-default">${p}</div>`).join('');
-            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div class="text-green-400 py-1 cursor-default">${c}</div>`).join('');
+            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div>${p}</div>`).join('');
+            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div>${c}</div>`).join('');
         }
 
         init();
