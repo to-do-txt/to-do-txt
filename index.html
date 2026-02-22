@@ -11,10 +11,9 @@
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#1e1e1e] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#252525] p-10 rounded-2xl border border-gray-800 shadow-2xl">
-            <div class="text-4xl mb-4">🗂️</div>
-            <h1 class="text-3xl font-bold mb-2 text-white text-blue-400">DropDotTxt</h1>
-            <p class="text-gray-400 mb-8 px-4">Your private todo.txt web client.</p>
-            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all transform hover:scale-105">
+            <h1 class="text-3xl font-bold mb-2 text-blue-400">DropDotTxt</h1>
+            <p class="text-gray-400 mb-8">Connect to sync your todo.txt</p>
+            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all">
                 Connect Dropbox
             </button>
         </div>
@@ -22,15 +21,15 @@
 
     <header class="p-4 bg-[#252525] border-b border-[#333] shadow-lg">
         <div class="max-w-5xl mx-auto flex items-center gap-6">
-            <div class="font-bold text-xl text-blue-400 tracking-tight hidden sm:block">DropDotTxt</div>
+            <div class="font-bold text-xl text-blue-400 tracking-tight">DropDotTxt</div>
             <div class="flex-1 flex gap-2">
                 <input type="text" id="newTodo" 
                        onkeypress="if(event.key === 'Enter') addTask()"
-                       placeholder="Add task: (A) Call Mom +Family @Phone" 
-                       class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm transition-all">
-                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm transition-colors">Add</button>
+                       placeholder="Add task... (A) Task +Project @Context" 
+                       class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm">Add</button>
             </div>
-            <button onclick="doLogout()" class="text-[10px] uppercase tracking-widest text-gray-500 hover:text-red-400 transition-colors">Logout</button>
+            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400">Logout</button>
         </div>
     </header>
 
@@ -43,9 +42,7 @@
         </aside>
 
         <main class="flex-1 p-6 overflow-y-auto bg-[#1e1e1e]">
-            <div id="todoList" class="space-y-1 max-w-4xl mx-auto">
-                <div class="text-center text-gray-600 animate-pulse mt-10">Syncing with Dropbox...</div>
-            </div>
+            <div id="todoList" class="space-y-1 max-w-4xl mx-auto"></div>
         </main>
     </div>
 
@@ -59,24 +56,35 @@
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
+            const token = sessionStorage.getItem('dbx_token');
             
             if (code) {
                 try {
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
                     sessionStorage.setItem('dbx_token', resp.result.access_token);
+                    // Clear the code from URL so logout works
                     window.history.replaceState({}, document.title, REDIRECT_URI);
                     startApp(resp.result.access_token);
                 } catch (e) { showLogin(); }
-            } else if (sessionStorage.getItem('dbx_token')) {
-                startApp(sessionStorage.getItem('dbx_token'));
+            } else if (token) {
+                startApp(token);
             } else {
                 showLogin();
             }
         }
 
         function showLogin() { document.getElementById('loginOverlay').classList.remove('hidden'); }
-        async function doLogin() { window.location.href = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true); }
-        function doLogout() { sessionStorage.removeItem('dbx_token'); window.location.reload(); }
+        
+        async function doLogin() { 
+            const authUrl = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true);
+            window.location.href = authUrl; 
+        }
+
+        function doLogout() { 
+            sessionStorage.removeItem('dbx_token'); 
+            // Redirect to the clean URL without any auth codes
+            window.location.href = REDIRECT_URI;
+        }
         
         function startApp(token) { 
             dbx = new Dropbox.Dropbox({ accessToken: token }); 
@@ -91,7 +99,7 @@
                 render();
             } catch (e) {
                 console.log("No file found, starting fresh.");
-                allTasks = ["(A) Welcome to DropDotTxt! @Setup"];
+                allTasks = ["(A) Task synced!"];
                 render();
             }
         }
@@ -104,10 +112,14 @@
                     contents: content, 
                     mode: { ".tag": "overwrite" } 
                 });
-                console.log("Saved to Dropbox");
+                console.log("Saved successfully");
             } catch (error) {
                 console.error("Save Error:", error);
-                alert("Sync failed. Check your connection.");
+                if (error.status === 403) {
+                    alert("Write Permission Denied. Please Logout and Login again.");
+                } else {
+                    alert("Sync Error. Check console (F12).");
+                }
             }
         }
 
@@ -118,8 +130,8 @@
             
             allTasks.push(val);
             input.value = "";
-            render(); // UI update first for speed
-            await saveTasks(); // Then sync
+            render(); 
+            await saveTasks();
         }
 
         async function deleteTask(index) {
@@ -130,34 +142,19 @@
 
         function render() {
             const list = document.getElementById('todoList');
-            // Sort: Priorities (A, B, C) always move to the top
             allTasks.sort();
-
-            list.innerHTML = allTasks.map((t, i) => {
-                let color = "border-l-blue-500";
-                if(t.startsWith("(A)")) color = "border-l-red-500 text-red-400";
-                else if(t.startsWith("(B)")) color = "border-l-orange-400 text-orange-300";
-                else if(t.startsWith("(C)")) color = "border-l-yellow-500 text-yellow-200";
-                else if(t.startsWith("(D)")) color = "border-l-green-500 text-green-400";
-
-                return `
-                <div class="group flex items-center bg-[#252525] border-l-4 ${color} mb-1 p-3 shadow-sm hover:bg-[#2d2d2d] transition-all">
+            list.innerHTML = allTasks.map((t, i) => `
+                <div class="group flex items-center bg-[#252525] border-l-4 border-blue-500 mb-1 p-3 shadow-sm hover:bg-[#2d2d2d] transition-all">
                     <span class="flex-1 text-sm tracking-wide">${t}</span>
                     <button onclick="deleteTask(${i})" class="text-gray-600 group-hover:text-red-500 px-3 py-1 transition-colors">✕</button>
-                </div>`;
-            }).join('');
+                </div>`).join('');
             
-            // Extract metadata for Sidebar
             const text = allTasks.join(' ');
             const projects = [...new Set(text.match(/\+\w+/g))];
             const contexts = [...new Set(text.match(/@\w+/g))];
             
-            document.getElementById('projectList').innerHTML = (projects || []).map(p => 
-                `<div class="text-blue-400 hover:text-blue-300 cursor-default py-1 transition-colors">${p}</div>`
-            ).join('');
-            document.getElementById('contextList').innerHTML = (contexts || []).map(c => 
-                `<div class="text-green-400 hover:text-green-300 cursor-default py-1 transition-colors">${c}</div>`
-            ).join('');
+            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div class="text-blue-400 py-1">${p}</div>`).join('');
+            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div class="text-green-400 py-1">${c}</div>`).join('');
         }
 
         init();
