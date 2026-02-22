@@ -23,10 +23,7 @@
         <div class="max-w-5xl mx-auto flex items-center gap-6">
             <div class="font-bold text-xl text-blue-400 tracking-tight">DropDotTxt</div>
             <div class="flex-1 flex gap-2">
-                <input type="text" id="newTodo" 
-                       onkeypress="if(event.key === 'Enter') addTask()"
-                       placeholder="Add task... (A) Task +Project @Context" 
-                       class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm transition-colors">Add</button>
             </div>
             <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</button>
@@ -40,10 +37,9 @@
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
             <div id="contextList" class="space-y-1 text-sm font-medium"></div>
         </aside>
-
         <main class="flex-1 p-6 overflow-y-auto bg-[#1e1e1e]">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto">
-                <div id="loadingState" class="text-center text-gray-600 mt-10">Syncing...</div>
+                <div id="loadingState" class="text-center text-gray-600 mt-10">Waiting for connection...</div>
             </div>
         </main>
     </div>
@@ -51,6 +47,8 @@
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx'; 
         const REDIRECT_URI = window.location.origin + window.location.pathname;
+        
+        // This helper ensures we don't lose the PKCE challenge during the loop
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx;
         let allTasks = [];
@@ -58,46 +56,49 @@
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
-            const token = sessionStorage.getItem('dbx_token');
+            const cachedToken = localStorage.getItem('dbx_token'); // Switched to localStorage for persistence
 
-            // 1. Priority: If we have a code in the URL, exchange it and REDIRECT IMMEDIATELY
+            if (cachedToken) {
+                console.log("Found cached token.");
+                if (code) window.history.replaceState({}, document.title, REDIRECT_URI);
+                startApp(cachedToken);
+                return;
+            }
+
             if (code) {
                 try {
-                    const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
-                    sessionStorage.setItem('dbx_token', resp.result.access_token);
-                    // This is the loop-breaker: Hard redirect to clean URL
+                    console.log("Code found, attempting swap...");
+                    // Using the Dropbox SDK's built-in exchange method
+                    const response = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
+                    const token = response.result.access_token;
+                    
+                    localStorage.setItem('dbx_token', token);
+                    window.location.href = REDIRECT_URI; // Hard reload to clear the URL code
+                } catch (error) {
+                    console.error("TOKEN EXCHANGE ERROR:", error);
+                    alert("Exchange failed: " + JSON.stringify(error));
                     window.location.href = REDIRECT_URI;
-                    return; 
-                } catch (e) {
-                    console.error("Auth Error", e);
-                    window.location.href = REDIRECT_URI; // Reset on failure
-                    return;
                 }
-            }
-
-            // 2. If no code in URL, but we have a token in storage, start the app
-            if (token) {
-                startApp(token);
             } else {
                 document.getElementById('loginOverlay').classList.remove('hidden');
-                document.getElementById('loadingState').classList.add('hidden');
             }
         }
 
-        async function doLogin() { 
-            sessionStorage.removeItem('dbx_token');
+        async function doLogin() {
+            localStorage.removeItem('dbx_token');
+            // This URL creation method is more robust for GitHub Pages
             const authUrl = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true);
-            window.location.href = authUrl; 
+            window.location.href = authUrl;
         }
 
-        function doLogout() { 
-            sessionStorage.removeItem('dbx_token'); 
+        function doLogout() {
+            localStorage.removeItem('dbx_token');
             window.location.href = REDIRECT_URI;
         }
-        
-        function startApp(token) { 
-            dbx = new Dropbox.Dropbox({ accessToken: token }); 
-            loadTasks(); 
+
+        function startApp(token) {
+            dbx = new Dropbox.Dropbox({ accessToken: token });
+            loadTasks();
         }
 
         async function loadTasks() {
@@ -107,8 +108,7 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
             } catch (e) {
-                console.log("Empty or missing file.");
-                allTasks = ["(A) Welcome to DropDotTxt!"];
+                allTasks = ["(A) Welcome! Sync works. Add a task to start writing to Dropbox."];
                 render();
             }
         }
@@ -121,46 +121,43 @@
                     contents: content, 
                     mode: { ".tag": "overwrite" } 
                 });
-                console.log("Synced.");
+                console.log("Success: Written to Dropbox");
             } catch (error) {
-                console.error("Sync Error", error);
-                if (error.status === 403) {
-                    alert("Write access denied. Please Logout and back in.");
-                }
+                console.error("SAVE ERROR:", error);
+                alert("Dropbox Write Error: " + error.status);
             }
         }
 
-        async function addTask() {
+        function addTask() {
             const input = document.getElementById('newTodo');
-            const val = input.value.trim();
-            if (!val) return;
-            allTasks.push(val);
+            if (!input.value.trim()) return;
+            allTasks.push(input.value.trim());
             input.value = "";
-            render(); 
-            await saveTasks();
+            render();
+            saveTasks();
         }
 
-        async function deleteTask(index) {
+        function deleteTask(index) {
             allTasks.splice(index, 1);
             render();
-            await saveTasks();
+            saveTasks();
         }
 
         function render() {
             const list = document.getElementById('todoList');
+            document.getElementById('loadingState').classList.add('hidden');
             allTasks.sort();
             list.innerHTML = allTasks.map((t, i) => `
-                <div class="group flex items-center bg-[#252525] border-l-4 border-blue-500 mb-1 p-3 hover:bg-[#2d2d2d] transition-all">
-                    <span class="flex-1 text-sm tracking-wide">${t}</span>
-                    <button onclick="deleteTask(${i})" class="text-gray-600 group-hover:text-red-500 px-3 transition-colors">✕</button>
+                <div class="group flex items-center bg-[#252525] border-l-4 border-blue-600 mb-1 p-3 hover:bg-[#2d2d2d]">
+                    <span class="flex-1 text-sm font-medium">${t}</span>
+                    <button onclick="deleteTask(${i})" class="text-gray-600 hover:text-red-500 px-2 transition-colors">✕</button>
                 </div>`).join('');
             
             const text = allTasks.join(' ');
             const projects = [...new Set(text.match(/\+\w+/g))];
             const contexts = [...new Set(text.match(/@\w+/g))];
-            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div class="text-blue-400 py-1">${p}</div>`).join('');
-            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div class="text-green-400 py-1">${c}</div>`).join('');
-            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div class="text-blue-400 py-1 cursor-default">${p}</div>`).join('');
+            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div class="text-green-400 py-1 cursor-default">${c}</div>`).join('');
         }
 
         init();
