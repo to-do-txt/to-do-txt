@@ -13,7 +13,7 @@
         <div class="text-center bg-[#252525] p-10 rounded-2xl border border-gray-800 shadow-2xl">
             <h1 class="text-3xl font-bold mb-2 text-blue-400">DropDotTxt</h1>
             <p class="text-gray-400 mb-8">Connect to sync your todo.txt</p>
-            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all">
+            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all transform hover:scale-105">
                 Connect Dropbox
             </button>
         </div>
@@ -27,9 +27,9 @@
                        onkeypress="if(event.key === 'Enter') addTask()"
                        placeholder="Add task... (A) Task +Project @Context" 
                        class="flex-1 bg-[#121212] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
-                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm">Add</button>
+                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded font-bold text-sm transition-colors">Add</button>
             </div>
-            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400">Logout</button>
+            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</button>
         </div>
     </header>
 
@@ -42,7 +42,9 @@
         </aside>
 
         <main class="flex-1 p-6 overflow-y-auto bg-[#1e1e1e]">
-            <div id="todoList" class="space-y-1 max-w-4xl mx-auto"></div>
+            <div id="todoList" class="space-y-1 max-w-4xl mx-auto">
+                <div id="statusMessage" class="text-center text-gray-600 mt-10">Initializing...</div>
+            </div>
         </main>
     </div>
 
@@ -56,33 +58,48 @@
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
-            const token = sessionStorage.getItem('dbx_token');
+            const cachedToken = sessionStorage.getItem('dbx_token');
             
+            // 1. If we have a token, use it and ignore the URL code
+            if (cachedToken) {
+                if (code) cleanUrl();
+                startApp(cachedToken);
+                return;
+            }
+
+            // 2. If we have a code but no token, exchange it
             if (code) {
                 try {
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
-                    sessionStorage.setItem('dbx_token', resp.result.access_token);
-                    // Clear the code from URL so logout works
-                    window.history.replaceState({}, document.title, REDIRECT_URI);
-                    startApp(resp.result.access_token);
-                } catch (e) { showLogin(); }
-            } else if (token) {
-                startApp(token);
+                    const token = resp.result.access_token;
+                    sessionStorage.setItem('dbx_token', token);
+                    cleanUrl();
+                    startApp(token);
+                } catch (e) {
+                    console.error("Auth Loop Error:", e);
+                    doLogout(); // Reset if the code is invalid/expired
+                }
             } else {
                 showLogin();
             }
         }
 
-        function showLogin() { document.getElementById('loginOverlay').classList.remove('hidden'); }
+        function cleanUrl() {
+            window.history.replaceState({}, document.title, REDIRECT_URI);
+        }
+
+        function showLogin() { 
+            document.getElementById('loginOverlay').classList.remove('hidden'); 
+        }
         
         async function doLogin() { 
+            sessionStorage.removeItem('dbx_token');
             const authUrl = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true);
             window.location.href = authUrl; 
         }
 
         function doLogout() { 
             sessionStorage.removeItem('dbx_token'); 
-            // Redirect to the clean URL without any auth codes
             window.location.href = REDIRECT_URI;
         }
         
@@ -98,8 +115,7 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
             } catch (e) {
-                console.log("No file found, starting fresh.");
-                allTasks = ["(A) Task synced!"];
+                allTasks = ["(A) Task synced! Add your first one above."];
                 render();
             }
         }
@@ -112,13 +128,12 @@
                     contents: content, 
                     mode: { ".tag": "overwrite" } 
                 });
-                console.log("Saved successfully");
+                console.log("Dropbox Sync Successful");
             } catch (error) {
-                console.error("Save Error:", error);
+                console.error("Dropbox Save Error:", error);
                 if (error.status === 403) {
-                    alert("Write Permission Denied. Please Logout and Login again.");
-                } else {
-                    alert("Sync Error. Check console (F12).");
+                    alert("Write Permission Denied. Logging out to refresh permissions.");
+                    doLogout();
                 }
             }
         }
@@ -143,11 +158,22 @@
         function render() {
             const list = document.getElementById('todoList');
             allTasks.sort();
-            list.innerHTML = allTasks.map((t, i) => `
-                <div class="group flex items-center bg-[#252525] border-l-4 border-blue-500 mb-1 p-3 shadow-sm hover:bg-[#2d2d2d] transition-all">
-                    <span class="flex-1 text-sm tracking-wide">${t}</span>
-                    <button onclick="deleteTask(${i})" class="text-gray-600 group-hover:text-red-500 px-3 py-1 transition-colors">✕</button>
-                </div>`).join('');
+            
+            if (allTasks.length === 0) {
+                list.innerHTML = `<div class="text-center text-gray-600 mt-10">No tasks found.</div>`;
+            } else {
+                list.innerHTML = allTasks.map((t, i) => {
+                    let color = "border-l-blue-500";
+                    if(t.startsWith("(A)")) color = "border-l-red-500 text-red-400";
+                    else if(t.startsWith("(B)")) color = "border-l-orange-400 text-orange-300";
+                    
+                    return `
+                    <div class="group flex items-center bg-[#252525] border-l-4 ${color} mb-1 p-3 shadow-sm hover:bg-[#2d2d2d] transition-all">
+                        <span class="flex-1 text-sm tracking-wide">${t}</span>
+                        <button onclick="deleteTask(${i})" class="text-gray-600 group-hover:text-red-500 px-3 py-1 transition-colors font-bold">✕</button>
+                    </div>`;
+                }).join('');
+            }
             
             const text = allTasks.join(' ');
             const projects = [...new Set(text.match(/\+\w+/g))];
