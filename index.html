@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.5.2</title>
+    <title>to-do-txt v3.5.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root {
-            /* Signature Dark Mode Colors */
             --bg-app: #121212;
             --bg-card: #1e1e1e;
             --bg-input: #0a0a0a;
@@ -29,10 +28,12 @@
         }
 
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s, color 0.1s; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg-app); }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
         
+        /* Header hierarchy styles */
+        .h1-style { font-size: 1.5rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; padding-top: 2rem; margin-bottom: 1rem; }
+        .h2-style { font-size: 1.125rem; font-weight: 800; color: #60a5fa; padding-top: 1.5rem; margin-bottom: 0.75rem; border-bottom: 1px solid #333; }
+        .h3-style { font-size: 0.65rem; font-weight: 900; color: #93c5fd; letter-spacing: 0.1em; text-transform: uppercase; padding-top: 1rem; margin-bottom: 0.5rem; opacity: 0.8; }
+
         .prio-a { border-color: #fb923c !important; }
         .prio-b { border-color: #facc15 !important; }
         .prio-c { border-color: #4ade80 !important; }
@@ -42,12 +43,8 @@
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         
         #sidebar { z-index: 30; transition: transform 0.3s ease-in-out; background-color: var(--bg-app); border-color: var(--sidebar-border); }
-        header { z-index: 50; position: relative; } /* Ensure header is above sidebar */
-        
-        #suggestions { 
-            z-index: 100 !important; 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-        }
+        header { z-index: 50; position: relative; }
+        #suggestions { z-index: 100 !important; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
 
         .overdue-alert { border-right: 2px solid #ef4444 !important; }
         @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
@@ -56,11 +53,11 @@
         .syncing-anim { animation: pulse 1s infinite; }
     </style>
 </head>
-<body class="font-sans h-screen flex flex-col overflow-hidden">
+<body class="font-sans h-screen flex flex-col overflow-hidden" onclick="handleGlobalClick(event)">
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText">v3.5.2</div>
+        <div id="statusText">v3.5.3</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
@@ -75,8 +72,8 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-3 text-[9px] font-bold uppercase tracking-widest">
-                    <button onclick="toggleTheme()" id="themeToggle" class="text-yellow-500 hover:opacity-80 transition-opacity">☀️ Light</button>
-                    <select id="sortSelect" onchange="setSort(this.value)" class="bg-transparent border border-gray-700 text-muted px-2 py-1 rounded outline-none cursor-pointer hover:border-gray-500">
+                    <button onclick="toggleTheme()" id="themeToggle" class="text-yellow-500">☀️ Light</button>
+                    <select id="sortSelect" onchange="setSort(this.value)" class="bg-transparent border border-gray-700 text-muted px-2 py-1 rounded outline-none cursor-pointer">
                         <option value="file">File Order</option>
                         <option value="priority">Priority</option>
                         <option value="due">Due Date</option>
@@ -94,16 +91,16 @@
             </div>
             <div id="addBar" class="relative flex gap-2">
                 <div class="flex-1 relative">
-                    <input type="text" id="newTodo" onkeydown="handleInputKeydown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="w-full input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeydown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="w-full input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
                     <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b z-[100] max-h-60 overflow-y-auto mt-1"></div>
                 </div>
-                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500 transition-colors">Add</button>
+                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500">Add</button>
             </div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden relative">
-        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 p-6 border-r md:relative md:translate-x-0 md:block overflow-y-auto shadow-2xl md:shadow-none">
+        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 p-6 border-r md:relative md:translate-x-0 md:block overflow-y-auto">
             <div id="pastDueContainer" class="mb-8 hidden">
                 <h2 class="text-[10px] font-black text-red-500 mb-4 uppercase tracking-widest">Past Due</h2>
                 <div id="pastDueList" class="space-y-1 text-sm"></div>
@@ -120,7 +117,7 @@
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
             <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
                 <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-4 border rounded outline-none leading-relaxed resize-none"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest hover:bg-orange-500">Save Changes</button>
+                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest">Save Changes</button>
             </div>
         </main>
     </div>
@@ -143,10 +140,6 @@
             if (token) {
                 dbx = new Dropbox.Dropbox({ accessToken: token });
                 loadTasks();
-                window.addEventListener('focus', checkForChanges);
-            } else {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('code')) handleAuthCode(urlParams.get('code'));
             }
         }
 
@@ -163,83 +156,10 @@
             btn.style.color = isLight ? "#4f46e5" : "#eab308";
         }
 
-        // Suggestions & UI Core
-        function showSuggestions(query) {
-            const isCtx = query.startsWith('@');
-            const typeReg = isCtx ? REGEX_CONTEXT : REGEX_PROJECT;
-            const matchesMap = {};
-            allTasks.forEach(t => { (t.match(typeReg) || []).forEach(tag => matchesMap[tag] = (matchesMap[tag] || 0) + 1); });
-            const sorted = Object.keys(matchesMap).filter(t => t.toLowerCase().startsWith(query.toLowerCase())).sort((a,b) => matchesMap[b] - matchesMap[a]);
-            
-            const container = document.getElementById('suggestions');
-            if (sorted.length > 0) {
-                suggestionIndex = 0;
-                container.innerHTML = sorted.map((m, i) => `
-                    <div class="p-3 cursor-pointer text-sm border-b border-gray-800/50 flex justify-between items-center transition-colors ${i===0 ? 'bg-blue-600 text-white' : 'hover:bg-gray-800'}" onclick="applySuggestion('${m}')">
-                        <span class="font-bold">${m}</span>
-                        <span class="text-[10px] opacity-60">${matchesMap[m]} tasks</span>
-                    </div>`).join('');
-                container.classList.remove('hidden');
-            } else hideSuggestions();
-        }
-
-        function applySuggestion(tag) {
-            const inp = document.getElementById('newTodo');
-            const words = inp.value.slice(0, inp.selectionStart).split(/\s+/);
-            words[words.length-1] = tag;
-            inp.value = words.join(' ') + " " + inp.value.slice(inp.selectionStart);
-            hideSuggestions();
-            inp.focus();
-        }
-
-        function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); }
-
-        function handleInput(e) {
-            const val = e.target.value;
-            const cursor = e.target.selectionStart;
-            const word = val.slice(0, cursor).split(/\s+/).pop();
-            if (word.startsWith('@') || word.startsWith('+')) showSuggestions(word);
-            else hideSuggestions();
-        }
-
-        function handleInputKeydown(e) {
-            const container = document.getElementById('suggestions');
-            if (container.classList.contains('hidden')) { if (e.key === 'Enter') addTask(); return; }
-            if (e.key === 'Enter' || e.key === 'Tab') { 
-                e.preventDefault(); 
-                const active = container.children[suggestionIndex];
-                if(active) applySuggestion(active.querySelector('span').innerText);
-            } else if (e.key === 'Escape') hideSuggestions();
-        }
-
-        // Task & Sync Logic
-        async function loadTasks() {
-            if (isSyncing) return;
-            isSyncing = true;
-            document.getElementById('syncBtn')?.classList.add('syncing-anim');
-            try {
-                const res = await dbx.filesDownload({ path: '/todo.txt' });
-                lastServerTag = res.result.rev;
-                const text = await res.result.fileBlob.text();
-                allTasks = text.split('\n').filter(t => t.trim() !== "");
-                render();
-                updateSyncTime();
-            } catch (e) { console.error("Sync Error:", e); }
-            finally { 
-                isSyncing = false;
-                document.getElementById('syncBtn')?.classList.remove('syncing-anim');
-            }
-        }
-
-        async function saveTasks() {
-            if (isSyncing) return;
-            isSyncing = true;
-            try {
-                const res = await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                lastServerTag = res.result.rev;
-                updateSyncTime();
-            } catch (e) { console.error("Save Error:", e); }
-            finally { isSyncing = false; }
+        function handleGlobalClick(e) {
+            const suggestions = document.getElementById('suggestions');
+            const addInp = document.getElementById('newTodo');
+            if (!suggestions.contains(e.target) && e.target !== addInp) hideSuggestions();
         }
 
         function render() {
@@ -262,7 +182,17 @@
             }
 
             list.innerHTML = display.map(item => {
-                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-gray-700/50 mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
+                // Header Hierarchy Logic
+                if (item.meta.isHeader) {
+                    let hClass = 'h3-style';
+                    let cleanText = item.text.trim();
+                    if (cleanText.startsWith('###')) hClass = 'h3-style';
+                    else if (cleanText.startsWith('##')) hClass = 'h2-style';
+                    else if (cleanText.startsWith('#')) hClass = 'h1-style';
+                    
+                    return `<div class="${hClass}">${cleanText.replace(/^[#\s]*/, '')}</div>`;
+                }
+
                 const isDone = item.text.startsWith('x ');
                 if (editingIndex === item.originalIndex) return `<div class="p-2 card-bg rounded border border-blue-500"><input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)"></div>`;
 
@@ -283,16 +213,79 @@
             updateSidebars(display);
         }
 
-        // Utils
         function getTaskMeta(text) {
             const p = text.match(REGEX_PRIO_START), d = text.match(/due:(\d{4})[-.](\d{2})[-.](\d{2})/), pr = text.match(REGEX_PROJECT), ctx = text.match(REGEX_CONTEXT);
-            const isHeader = text.startsWith('#') || text.startsWith('--');
+            const isHeader = text.startsWith('#');
             let isPastDue = false;
             if (d) { 
                 const due = new Date(d[1], d[2]-1, d[3]), today = new Date(); today.setHours(0,0,0,0);
                 if (due < today && !text.startsWith('x ')) isPastDue = true;
             }
             return { priority: p ? p[1] : 'Z', due: d ? d[0].replace('due:', '') : '9999-12-31', project: pr ? pr[0] : 'ZZZ', context: ctx ? ctx[0] : 'ZZZ', isHeader, isPastDue };
+        }
+
+        // Suggestions logic
+        function handleInput(e) {
+            const val = e.target.value;
+            const cursor = e.target.selectionStart;
+            const word = val.slice(0, cursor).split(/\s+/).pop();
+            if (word.startsWith('@') || word.startsWith('+')) showSuggestions(word);
+            else hideSuggestions();
+        }
+
+        function showSuggestions(query) {
+            const isCtx = query.startsWith('@');
+            const typeReg = isCtx ? REGEX_CONTEXT : REGEX_PROJECT;
+            const matchesMap = {};
+            allTasks.forEach(t => { (t.match(typeReg) || []).forEach(tag => matchesMap[tag] = (matchesMap[tag] || 0) + 1); });
+            const sorted = Object.keys(matchesMap).filter(t => t.toLowerCase().startsWith(query.toLowerCase())).sort((a,b) => matchesMap[b] - matchesMap[a]);
+            
+            const container = document.getElementById('suggestions');
+            if (sorted.length > 0) {
+                suggestionIndex = 0;
+                container.innerHTML = sorted.map((m, i) => `
+                    <div class="p-3 cursor-pointer text-sm border-b border-gray-800/50 flex justify-between items-center transition-colors ${i===0 ? 'bg-blue-600 text-white' : 'hover:bg-gray-800'}" onclick="applySuggestion('${m}')">
+                        <span class="font-bold">${m}</span>
+                        <span class="text-[10px] opacity-60">${matchesMap[m]}</span>
+                    </div>`).join('');
+                container.classList.remove('hidden');
+            } else hideSuggestions();
+        }
+
+        function applySuggestion(tag) {
+            const inp = document.getElementById('newTodo');
+            const words = inp.value.slice(0, inp.selectionStart).split(/\s+/);
+            words[words.length-1] = tag;
+            inp.value = words.join(' ') + " " + inp.value.slice(inp.selectionStart);
+            hideSuggestions();
+            inp.focus();
+        }
+
+        function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); }
+
+        // Standard Dropbox and UI functions below
+        async function loadTasks() {
+            if (isSyncing) return; isSyncing = true;
+            document.getElementById('syncBtn')?.classList.add('syncing-anim');
+            try {
+                const res = await dbx.filesDownload({ path: '/todo.txt' });
+                lastServerTag = res.result.rev;
+                const text = await res.result.fileBlob.text();
+                allTasks = text.split('\n').filter(t => t.trim() !== "");
+                render();
+                updateSyncTime();
+            } catch (e) { console.error(e); }
+            finally { isSyncing = false; document.getElementById('syncBtn')?.classList.remove('syncing-anim'); }
+        }
+
+        async function saveTasks() {
+            if (isSyncing) return; isSyncing = true;
+            try {
+                const res = await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
+                lastServerTag = res.result.rev;
+                updateSyncTime();
+            } catch (e) { console.error(e); }
+            finally { isSyncing = false; }
         }
 
         function updateSidebars(currentVisibleTasks) {
@@ -318,14 +311,22 @@
             sb('contextList', REGEX_CONTEXT, 'text-green-400');
         }
 
+        function handleInputKeydown(e) {
+            const container = document.getElementById('suggestions');
+            if (container.classList.contains('hidden')) { if (e.key === 'Enter') addTask(); return; }
+            if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applySuggestion(container.children[suggestionIndex].querySelector('span').innerText); }
+            else if (e.key === 'Escape') hideSuggestions();
+        }
+
         function addTask() {
             const inp = document.getElementById('newTodo'); let text = inp.value.trim(); if (!text) return;
-            const today = new Date().toISOString().split('T')[0];
-            text = text.match(REGEX_PRIO_START) ? `${text.match(REGEX_PRIO_START)[0]} ${today} ${text.replace(REGEX_PRIO_START, '').trim()}` : `${today} ${text}`;
+            if (!text.startsWith('#')) {
+                const today = new Date().toISOString().split('T')[0];
+                text = text.match(REGEX_PRIO_START) ? `${text.match(REGEX_PRIO_START)[0]} ${today} ${text.replace(REGEX_PRIO_START, '').trim()}` : `${today} ${text}`;
+            }
             allTasks.push(text); inp.value = ""; render(); saveTasks();
         }
 
-        async function checkForChanges() { if (isRawEditing || isSyncing || editingIndex !== null) return; try { const meta = await dbx.filesGetMetadata({ path: '/todo.txt' }); if (meta.result.rev !== lastServerTag) loadTasks(); } catch (e) {} }
         function toggleTask(i) { const today = new Date().toISOString().split('T')[0]; allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${today} ${allTasks[i]}`; render(); saveTasks(); }
         function deleteTask(i) { if(confirm('Delete?')) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
@@ -339,6 +340,7 @@
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function updateSyncTime() { document.getElementById('lastSync').innerText = `Synced ${new Date().toLocaleTimeString([], { hour12: false })}`; }
         function doLogout() { localStorage.removeItem('dbx_token'); window.location.reload(); }
+        function setSort(val) { currentSort = val; render(); }
 
         init();
     </script>
