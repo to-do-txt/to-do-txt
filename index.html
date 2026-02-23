@@ -9,19 +9,15 @@
     <meta name="theme-color" content="#1e1e1e">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #121212; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
         .prio-a { border-left-color: #fb923c !important; }
         .prio-b { border-left-color: #facc15 !important; }
-        .prio-c { border-left-color: #4ade80 !important; }
         .prio-none { border-left-color: #3b82f6 !important; }
         #sidebar { transition: transform 0.3s ease-in-out; }
-        @media (max-width: 768px) {
-            #sidebar.closed { transform: translateX(-100%); }
-            #sidebar.open { transform: translateX(0); }
-        }
-        .kanban-column { min-width: 280px; max-width: 280px; }
+        @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
+        .task-row:hover .task-actions { opacity: 1; }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
@@ -29,80 +25,59 @@
     <div id="status" class="fixed bottom-2 right-4 text-[9px] font-mono z-50 flex items-center gap-3 bg-[#0a0a0a]/90 px-3 py-1.5 rounded-full border border-[#333]">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
         <div id="statusText" class="flex gap-3 items-center">
-            <span class="text-gray-400">v3.4.2</span>
-            <span class="text-gray-600 border-l border-gray-800 pl-3">Build: Feb 23, 08:35 AM</span>
-        </div>
-    </div>
-
-    <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
-        <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 mx-4">
-            <h1 class="text-2xl font-bold mb-4 text-blue-500 font-black tracking-tighter">to-do-txt</h1>
-            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white">Connect Dropbox</button>
+            <span class="text-gray-400">v3.4.4</span>
+            <span class="text-gray-600 border-l border-gray-800 pl-3">Feb 23, 08:52 AM</span>
         </div>
     </div>
 
     <header class="p-4 bg-[#1e1e1e] border-b border-[#333] z-40">
-        <div class="max-w-full mx-auto flex flex-col gap-3">
-            <div class="flex items-center justify-between gap-4">
+        <div class="max-w-5xl mx-auto flex flex-col gap-3">
+            <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <button onclick="toggleSidebar()" class="md:hidden text-gray-400 text-xl">☰</button>
-                    <div class="font-bold text-lg text-blue-500 cursor-pointer tracking-tighter" onclick="resetAll()">to-do-txt</div>
+                    <button onclick="toggleSidebar()" class="md:hidden text-gray-400">☰</button>
+                    <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetAll()">to-do-txt</div>
                 </div>
-                <div class="flex items-center gap-4 text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-white/70">
-                    <button onclick="toggleViewMode()" id="viewModeBtn" class="bg-blue-900/40 text-blue-400 px-2 py-1 rounded border border-blue-500/30">Board View</button>
-                    <button onclick="toggleHeaders()" id="headerToggle" class="text-green-400">Hide Headers</button>
-                    <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
-                    <button onclick="toggleRawEdit()" class="text-orange-400">Raw</button>
-                    <button onclick="doLogout()" class="text-gray-600">Logout</button>
+                <div class="flex gap-3 text-[10px] font-bold uppercase text-gray-500">
+                    <button onclick="toggleViewMode()" class="hover:text-blue-400">View</button>
+                    <button onclick="toggleRawEdit()" class="hover:text-orange-400">Raw</button>
+                    <button onclick="doLogout()" class="hover:text-red-400">Logout</button>
                 </div>
             </div>
             
+            <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
+            
             <div class="flex gap-2">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="flex-1 bg-[#0a0a0a] border border-[#333] rounded px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
-            </div>
-
-            <div id="addBar" class="flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none text-white">
-                <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add a task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
+                <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500">Add</button>
             </div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-6 z-50 border-r border-[#333] md:relative md:translate-x-0 md:block overflow-y-auto">
-            <div id="dashboardMetrics" class="mb-8 space-y-1 text-sm"></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-sm"></div></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-sm"></div></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-sm"></div></div>
+            <div id="dashboardMetrics" class="mb-8 text-sm"></div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1"></div></div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1"></div></div>
+            <div><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1"></div></div>
         </aside>
 
-        <main class="flex-1 overflow-hidden flex flex-col">
-            <div id="boardControls" class="hidden p-3 bg-[#1a1a1a] border-b border-[#333] flex gap-4 items-center">
-                <span class="text-[10px] font-bold uppercase text-gray-500 tracking-widest pl-2">Group By:</span>
-                <button onclick="setBoardAxis('project')" id="axisProject" class="text-[10px] px-3 py-1 rounded-full bg-blue-600 text-white uppercase font-bold">Projects</button>
-                <button onclick="setBoardAxis('context')" id="axisContext" class="text-[10px] px-3 py-1 rounded-full bg-[#333] text-gray-400 uppercase font-bold">Contexts</button>
-            </div>
-
-            <div id="viewContainer" class="flex-1 overflow-auto p-4">
-                <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full"></div>
-                <div id="kanbanBoard" class="hidden flex gap-4 h-full items-start overflow-x-auto"></div>
-            </div>
-
-            <div id="rawEditorContainer" class="hidden p-6 h-full flex flex-col">
-                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none h-full"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest">Save Changes</button>
+        <main class="flex-1 overflow-y-auto p-4 md:p-8">
+            <div id="todoList" class="max-w-4xl mx-auto space-y-1"></div>
+            <div id="kanbanBoard" class="hidden flex gap-4 h-full items-start overflow-x-auto pb-10"></div>
+            <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
+                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none"></textarea>
+                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 py-3 rounded text-xs font-bold uppercase">Update File</button>
             </div>
         </main>
     </div>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        const APP_VERSION = "v3.4.2";
-        const BUILD_TIME = "Feb 23, 08:35 AM";
+        const APP_VERSION = "v3.4.4";
+        const BUILD_TIME = "Feb 23, 08:52 AM";
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, 
-            editingIndex = null, currentRev = null, viewMode = 'list', boardAxis = 'project';
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, viewMode = 'list', currentRev = null;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -115,7 +90,7 @@
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
                     localStorage.setItem('dbx_token', resp.result.access_token);
                     window.location.href = REDIRECT_URI;
-                } else document.getElementById('loginOverlay').classList.remove('hidden');
+                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center"><button onclick="doLogin()" class="bg-blue-600 px-8 py-3 rounded font-bold">Connect Dropbox</button></div>`;
             }
         }
 
@@ -152,44 +127,20 @@
         }
 
         function updateSyncStatus(status) {
-            const ind = document.getElementById('syncIndicator'), txt = document.getElementById('statusText'), btn = document.getElementById('addBtn');
-            const info = `<span class="text-gray-400">${APP_VERSION}</span><span class="text-gray-600 border-l border-gray-800 pl-3">Build: ${BUILD_TIME}</span>`;
-            if (status === 'synced') { ind.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerHTML = info; btn.disabled = false; }
-            else if (status === 'outdated') { ind.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerHTML = `<span class="text-yellow-400 cursor-pointer underline font-bold" onclick="loadTasks()">Remote Updates Detected - Refresh</span>`; btn.disabled = true; }
-            else if (status === 'loading') { txt.innerText = "Syncing..."; ind.className = "w-2 h-2 rounded-full bg-blue-500 animate-bounce"; }
-            else { ind.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Sync Error"; }
+            const ind = document.getElementById('syncIndicator'), txt = document.getElementById('statusText');
+            const info = `<span class="text-gray-400">${APP_VERSION}</span><span class="text-gray-600 border-l border-gray-800 pl-3">${BUILD_TIME}</span>`;
+            if (status === 'synced') { ind.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerHTML = info; }
+            else if (status === 'outdated') { ind.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerHTML = `<span class="text-yellow-400 cursor-pointer underline" onclick="loadTasks()">Refresh Required</span>`; }
+            else { ind.className = "w-2 h-2 rounded-full bg-blue-500 animate-bounce"; txt.innerText = "Syncing..."; }
         }
 
         function getTaskMeta(text) {
-            const p = text.match(/^\(([A-Z])\)/), d = text.match(/due:(\d{4}-\d{2}-\d{2})/), pr = text.match(/\+\w+/), ctx = text.match(/@\w+/);
-            return { 
-                priority: p ? p[1] : 'Z', 
-                project: pr ? pr[0] : null, 
-                context: ctx ? ctx[0] : null,
-                isHeader: text.startsWith('#')
-            };
-        }
-
-        function toggleViewMode() {
-            viewMode = (viewMode === 'list') ? 'board' : 'list';
-            document.getElementById('viewModeBtn').innerText = (viewMode === 'list') ? 'Board View' : 'List View';
-            document.getElementById('boardControls').classList.toggle('hidden', viewMode === 'list');
-            document.getElementById('todoList').classList.toggle('hidden', viewMode === 'board');
-            document.getElementById('kanbanBoard').classList.toggle('hidden', viewMode === 'list');
-            render();
-        }
-
-        function setBoardAxis(axis) {
-            boardAxis = axis;
-            document.getElementById('axisProject').className = axis === 'project' ? 'text-[10px] px-3 py-1 rounded-full bg-blue-600 text-white uppercase font-bold' : 'text-[10px] px-3 py-1 rounded-full bg-[#333] text-gray-400 uppercase font-bold';
-            document.getElementById('axisContext').className = axis === 'context' ? 'text-[10px] px-3 py-1 rounded-full bg-blue-600 text-white uppercase font-bold' : 'text-[10px] px-3 py-1 rounded-full bg-[#333] text-gray-400 uppercase font-bold';
-            render();
+            const p = text.match(/^\(([A-Z])\)/), pr = text.match(/\+\w+/), ctx = text.match(/@\w+/);
+            return { priority: p ? p[1] : 'Z', project: pr ? pr[0] : null, context: ctx ? ctx[0] : null, isDone: text.startsWith('x ') };
         }
 
         function render() {
-            if (!allTasks.length && !currentRev) return;
-            if (viewMode === 'list') renderList();
-            else renderBoard();
+            if (viewMode === 'list') renderList(); else renderBoard();
             updateSidebars();
         }
 
@@ -197,65 +148,56 @@
             const list = document.getElementById('todoList'), search = (document.getElementById('searchInput')?.value || "").toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
 
-            if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
-            if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
-            activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
-            if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+            activeFilters.forEach(f => display = display.filter(t => t.text.includes(f)));
+            if (search) display = display.filter(t => t.text.toLowerCase().includes(search));
             
             list.innerHTML = display.map(item => {
-                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
-                return renderTaskItem(item);
+                const pClass = item.meta.isDone ? 'opacity-40' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : 'prio-none');
+                const content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>').replace(/(@\w+)/g, '<span class="text-green-400">$1</span>');
+                return `<div class="task-row group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#252525]">
+                    <input type="checkbox" ${item.meta.isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-3 accent-blue-500 cursor-pointer">
+                    <div class="flex-1 text-sm ${item.meta.isDone ? 'line-through text-gray-500 italic' : ''}" ondblclick="editTaskText(${item.originalIndex})">${content}</div>
+                    <div class="task-actions opacity-0 flex gap-2 ml-2 transition-opacity">
+                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-500 hover:text-red-500 text-xs">✕</button>
+                    </div>
+                </div>`;
             }).join('');
         }
 
         function renderBoard() {
             const board = document.getElementById('kanbanBoard'), search = (document.getElementById('searchInput')?.value || "").toLowerCase();
-            const axis = boardAxis; 
-            const tags = [...new Set(allTasks.map(t => getTaskMeta(t)[axis]).filter(x => x !== null))].sort();
-            tags.push(null); 
-
+            const tags = [...new Set(allTasks.map(t => getTaskMeta(t).project).filter(x => x !== null))].sort();
+            tags.push(null);
             board.innerHTML = tags.map(tag => {
                 const tasks = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }))
-                                      .filter(t => !t.meta.isHeader && (!showCompleted ? !t.text.startsWith('x ') : true))
-                                      .filter(t => t.meta[axis] === tag)
-                                      .filter(t => search ? t.text.toLowerCase().includes(search) : true);
-                
-                if (tasks.length === 0 && tag !== null) return ""; 
-
-                return `
-                    <div class="kanban-column flex flex-col h-full bg-[#1a1a1a] rounded-lg border border-[#333] max-h-[75vh]">
-                        <div class="p-3 border-b border-[#333] flex justify-between items-center sticky top-0 bg-[#1a1a1a] z-10 rounded-t-lg">
-                            <span class="text-[10px] font-black uppercase tracking-widest text-blue-400">${tag || 'Inbox'}</span>
-                            <span class="text-[10px] bg-[#333] px-2 py-0.5 rounded text-gray-400 font-bold">${tasks.length}</span>
-                        </div>
-                        <div class="p-2 space-y-2 overflow-y-auto flex-1">
-                            ${tasks.map(item => renderTaskItem(item, true)).join('')}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function renderTaskItem(item, isCard = false) {
-            const isDone = item.text.startsWith('x ');
-            const p = item.meta.priority;
-            const pClass = isDone ? 'border-l-gray-700 opacity-40' : (p === 'A' ? 'prio-a' : p === 'B' ? 'prio-b' : p === 'C' ? 'prio-c' : 'prio-none');
-            const cleanText = item.text.replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>')
-                                     .replace(/(\+\w+)/g, '<span class="text-blue-400 font-bold">$1</span>')
-                                     .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
-                                     .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>');
-
-            return `
-                <div class="group flex items-start bg-[#1e1e1e] border-l-4 ${pClass} ${isCard ? 'p-3 rounded shadow-md' : 'p-3 rounded-r mb-1'} hover:bg-[#252525]">
-                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="mt-1 w-4 h-4 mr-3 cursor-pointer accent-blue-500">
-                    <div class="flex-1 text-sm ${isDone ? 'line-through text-gray-500 italic' : ''}" onclick="startEditing(${item.originalIndex})">${cleanText}</div>
+                    .filter(t => t.meta.project === tag && (search ? t.text.toLowerCase().includes(search) : true));
+                if (tasks.length === 0 && tag !== null) return "";
+                return `<div class="bg-[#1a1a1a] p-3 rounded-lg border border-[#333] min-w-[280px]">
+                    <div class="text-[10px] font-black text-blue-500 uppercase mb-4">${tag || 'Inbox'}</div>
+                    ${tasks.map(t => `<div class="bg-[#222] p-2 rounded mb-2 text-xs">${t.text}</div>`).join('')}
                 </div>`;
+            }).join('');
         }
 
         function toggleTask(i) {
             const today = new Date().toISOString().split('T')[0];
             allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${today} ${allTasks[i]}`;
             render(); saveTasks();
+        }
+
+        function deleteTask(i) {
+            if (confirm("Permanently delete this task?")) {
+                allTasks.splice(i, 1);
+                render(); saveTasks();
+            }
+        }
+
+        function editTaskText(i) {
+            const newVal = prompt("Edit task:", allTasks[i]);
+            if (newVal !== null && newVal.trim() !== "") {
+                allTasks[i] = newVal.trim();
+                render(); saveTasks();
+            }
         }
 
         function addTask() {
@@ -266,26 +208,24 @@
         }
 
         function updateSidebars() {
-            const openT = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#'));
-            document.getElementById('dashboardMetrics').innerHTML = `<div class="flex justify-between items-center text-blue-400"><span>Tasks Open</span><span class="font-bold">${openT.length}</span></div>`;
+            const openT = allTasks.filter(t => !t.startsWith('x '));
+            document.getElementById('dashboardMetrics').innerHTML = `<div class="text-blue-400 font-bold">Tasks: ${openT.length}</div>`;
             const sb = (id, re, c) => {
                 const items = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = items.map(v => {
                     const count = openT.filter(t => t.includes(v)).length;
-                    return count > 0 || activeFilters.has(v) ? `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has(v) ? 'text-white font-bold underline' : c}">${v} <span class="text-[10px] bg-[#222] px-2 py-0.5 rounded">${count}</span></div>` : "";
+                    return count > 0 ? `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer text-xs p-1 ${activeFilters.has(v) ? 'bg-blue-900/30 text-white font-bold' : c}">${v} <span>${count}</span></div>` : "";
                 }).join('');
             };
             sb('priorityList', /\([A-Z]\)/g, 'text-orange-400'); sb('projectList', /\+\w+/g, 'text-blue-400'); sb('contextList', /@\w+/g, 'text-green-400');
         }
 
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
-        function toggleHeaders() { showHeaders = !showHeaders; render(); }
-        function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
-        function startEditing(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`)?.focus(), 10); }
+        function toggleViewMode() { viewMode = viewMode === 'list' ? 'board' : 'list'; document.getElementById('todoList').classList.toggle('hidden', viewMode === 'board'); document.getElementById('kanbanBoard').classList.toggle('hidden', viewMode === 'list'); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); }
-        function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('viewContainer').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
+        function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').parentElement.classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function resetAll() { activeFilters.clear(); viewMode = 'list'; document.getElementById('searchInput').value = ""; render(); }
+        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; viewMode = 'list'; render(); }
 
         init();
     </script>
