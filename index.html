@@ -11,13 +11,13 @@
 
     <div class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v1.2.0-stable</div>
+        <div id="statusText" class="text-gray-500">v1.3.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 shadow-2xl">
-            <h1 class="text-3xl font-bold mb-2 text-blue-500">DropDotTxt</h1>
-            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all">Connect Dropbox</button>
+            <h1 class="text-3xl font-bold mb-2 text-blue-500 text-3xl">DropDotTxt</h1>
+            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all mt-4">Connect Dropbox</button>
         </div>
     </div>
 
@@ -25,7 +25,7 @@
         <div class="max-w-5xl mx-auto flex items-center gap-6">
             <div class="font-bold text-xl text-blue-500 tracking-tight">DropDotTxt</div>
             <div class="flex-1 flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task... (A) Important +Project @Context" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task... (A) Task +Project @Context due:2026-02-28" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button id="addBtn" onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-colors">Add</button>
             </div>
             <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400">Logout</button>
@@ -34,8 +34,12 @@
 
     <div class="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
         <aside class="w-64 p-6 hidden md:block overflow-y-auto border-r border-[#333] bg-[#121212]">
+            <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Schedule</h2>
+            <div id="dueList" class="space-y-1 mb-8 text-sm font-medium text-yellow-500"></div>
+            
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
             <div id="projectList" class="space-y-1 mb-8 text-sm font-medium text-blue-400"></div>
+            
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
             <div id="contextList" class="space-y-1 text-sm font-medium text-green-400"></div>
         </aside>
@@ -104,10 +108,10 @@
                 const response = await dbx.filesDownload({ path: '/todo.txt' });
                 const text = await response.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
-                setStatus('v1.2.0-stable');
+                setStatus('v1.3.0-stable');
                 render();
             } catch (e) {
-                allTasks = ["(A) App Connected! Add a task to begin."];
+                allTasks = ["(A) Welcome! Add your first task with a due date like due:2026-02-28"];
                 setStatus('Ready');
                 render();
             }
@@ -123,18 +127,15 @@
                     mode: { ".tag": "overwrite" }
                 });
                 setStatus('Synced');
-                setTimeout(() => setStatus('v1.2.0-stable'), 2000);
-            } catch (error) {
-                setStatus('Sync Error', 'error');
-            }
+                setTimeout(() => setStatus('v1.3.0-stable'), 2000);
+            } catch (error) { setStatus('Sync Error', 'error'); }
         }
 
         function addTask() {
             const input = document.getElementById('newTodo');
-            const val = input.value.trim();
-            if (!val) return;
-            if (allTasks.length === 1 && allTasks[0].includes("App Connected")) allTasks = [];
-            allTasks.push(val);
+            if (!input.value.trim()) return;
+            if (allTasks.length === 1 && allTasks[0].includes("Welcome!")) allTasks = [];
+            allTasks.push(input.value.trim());
             input.value = "";
             render();
             saveTasks();
@@ -143,12 +144,9 @@
         function toggleTask(index) {
             let task = allTasks[index];
             const today = new Date().toISOString().split('T')[0];
-            
             if (task.startsWith('x ')) {
-                // Uncheck: Remove 'x YYYY-MM-DD '
                 allTasks[index] = task.replace(/^x \d{4}-\d{2}-\d{2} /, '');
             } else {
-                // Check: Prepend 'x YYYY-MM-DD '
                 allTasks[index] = `x ${today} ${task}`;
             }
             render();
@@ -163,7 +161,7 @@
 
         function render() {
             const list = document.getElementById('todoList');
-            // Sort: Uncompleted (alphabetical) then completed
+            // Sort: Priority (A-Z) first, then uncompleted, then completed
             allTasks.sort((a, b) => {
                 if (a.startsWith('x ') && !b.startsWith('x ')) return 1;
                 if (!a.startsWith('x ') && b.startsWith('x ')) return -1;
@@ -179,19 +177,26 @@
 
                 return `
                 <div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 hover:bg-[#252525] transition-all">
-                    <input type="checkbox" ${isDone ? 'checked' : ''} 
-                           onclick="toggleTask(${i})" 
-                           class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${i})" class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
                     <span class="flex-1 text-sm font-medium ${isDone ? 'line-through text-gray-500' : ''}">${t}</span>
                     <button onclick="deleteTask(${i})" class="text-gray-600 hover:text-red-500 px-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             
+            // SIDEBAR LOGIC
             const text = allTasks.join(' ');
-            const projects = [...new Set(text.match(/\+\w+/g))];
-            const contexts = [...new Set(text.match(/@\w+/g))];
-            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div class="hover:text-white cursor-default">${p}</div>`).join('');
-            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div class="hover:text-white cursor-default">${c}</div>`).join('');
+            
+            // Extract Due Dates
+            const dueDates = [...new Set(text.match(/due:\d{4}-\d{2}-\d{2}/g))].sort();
+            document.getElementById('dueList').innerHTML = (dueDates || []).map(d => `<div>${d.replace('due:', '')}</div>`).join('');
+
+            // Extract Projects
+            const projects = [...new Set(text.match(/\+\w+/g))].sort();
+            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div>${p}</div>`).join('');
+
+            // Extract Contexts
+            const contexts = [...new Set(text.match(/@\w+/g))].sort();
+            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div>${c}</div>`).join('');
         }
 
         init();
