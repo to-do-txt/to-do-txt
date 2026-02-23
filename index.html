@@ -8,79 +8,108 @@
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <meta name="theme-color" content="#1e1e1e">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #121212; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-        .prio-a { border-left-color: #fb923c !important; }
-        .prio-b { border-left-color: #facc15 !important; }
-        .prio-none { border-left-color: #3b82f6 !important; }
-        .task-row .task-actions { opacity: 0; transition: opacity 0.1s; }
-        .task-row:hover .task-actions { opacity: 1; }
-        @media (max-width: 768px) { .task-actions { opacity: 1; } }
-        .header-line {
-            color: #3b82f6; font-weight: 900; text-transform: uppercase;
-            font-size: 0.7rem; letter-spacing: 0.1em; padding: 1.5rem 0 0.5rem 0;
+        .prio-a { border-color: #fb923c !important; }
+        .prio-b { border-color: #facc15 !important; }
+        .prio-c { border-color: #4ade80 !important; }
+        .prio-none { border-color: #3b82f6 !important; }
+        #sidebar { transition: transform 0.3s ease-in-out; }
+        @media (max-width: 768px) {
+            #sidebar.closed { transform: translateX(-100%); }
+            #sidebar.open { transform: translateX(0); }
         }
-        .task-link { color: #60a5fa; text-decoration: underline; }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
-    <header class="p-4 md:p-6 bg-[#121212] border-b border-[#1e1e1e]">
-        <div class="max-w-5xl mx-auto">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-4">
-                    <button onclick="toggleSidebar()" class="md:hidden text-gray-400 text-xl">☰</button>
-                    <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetAll()">to-do-txt</div>
+    <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
+        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
+        <div id="statusText">v3.1.2</div>
+    </div>
+
+    <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
+        <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 mx-4">
+            <h1 class="text-2xl font-bold mb-4 text-blue-500 font-black tracking-tighter">to-do-txt</h1>
+            <p class="text-xs text-gray-500 mb-6 uppercase tracking-widest">Minimalist Task Sync</p>
+            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white shadow-lg">Connect Dropbox</button>
+        </div>
+    </div>
+
+    <header class="p-4 bg-[#1e1e1e] border-b border-[#333] z-40">
+        <div class="max-w-5xl mx-auto flex flex-col gap-3">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
+                    <div class="font-bold text-lg md:text-xl text-blue-500 cursor-pointer tracking-tighter" onclick="resetAll()">to-do-txt</div>
                 </div>
-                <div class="flex gap-3 md:gap-6 text-[10px] font-bold uppercase text-gray-500">
-                    <a href="#" onclick="doBackup()" class="hover:text-blue-400">Backup</a>
-                    <button onclick="toggleHeaders()" id="toggleHeadersBtn" class="hover:text-green-400">Hide Headers</button>
-                    <button onclick="toggleCompletedVisibility()" id="toggleDoneBtn" class="hover:text-purple-400">Hide Done</button>
-                    <button onclick="toggleRawEdit()" class="text-orange-400/80 hover:text-orange-400">Raw</button>
-                    <button onclick="doLogout()" class="hover:text-red-500">Logout</button>
+                <div class="flex items-center gap-4 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
+                    <button onclick="downloadBackup()" class="text-blue-400 hover:text-blue-300">Backup</button>
+                    <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
+                    <button onclick="toggleRawEdit()" class="text-orange-400">Raw</button>
+                    <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
             </div>
-            
-            <div class="space-y-3">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#222] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
-                <div class="flex gap-2">
-                    <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#222] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
-                    <button id="addBtn" onclick="addTask()" class="bg-[#2a2a2a] text-gray-500 px-6 py-2 rounded font-bold text-sm">Locked</button>
-                </div>
+
+            <div class="flex w-full">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
+            </div>
+
+            <div id="addBar" class="flex gap-2">
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white">
+                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
             </div>
         </div>
     </header>
 
-    <div class="flex flex-1 overflow-hidden">
-        <aside id="sidebar" class="hidden md:block w-64 bg-[#121212] p-8 border-r border-[#1e1e1e] overflow-y-auto">
-            <div id="dashboardMetrics" class="mb-10 space-y-3"></div>
-            <div class="mb-10"><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-2"></div></div>
-            <div class="mb-10"><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-2"></div></div>
-            <div><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-2"></div></div>
+    <div class="flex flex-1 overflow-hidden relative">
+        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-6 z-50 border-r border-[#333] md:relative md:translate-x-0 md:block overflow-y-auto">
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-sm"></div></div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-yellow-500/50">Due</h2><div id="dueList" class="space-y-1 text-sm"></div></div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-blue-500/50">Projects</h2><div id="projectList" class="space-y-1 text-sm"></div></div>
+            <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-green-500/50">Contexts</h2><div id="contextList" class="space-y-1 text-sm"></div></div>
         </aside>
 
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 relative">
-            <div id="todoList" class="max-w-4xl mx-auto space-y-1"></div>
-            <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-6 border border-[#222] rounded outline-none h-[60vh]"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-blue-600 py-3 rounded text-xs font-bold uppercase">Update</button>
+        <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/50 z-40 md:hidden"></div>
+
+        <main class="flex-1 p-4 md:p-6 overflow-y-auto w-full">
+            <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
+            <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
+                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none leading-relaxed resize-none"></textarea>
+                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest">Save Changes</button>
             </div>
         </main>
-    </div>
-
-    <div id="remoteToast" class="hidden fixed bottom-0 left-0 right-0 bg-yellow-400 text-black py-2 text-center text-xs font-bold cursor-pointer z-50" onclick="loadTasks()">
-        <span class="mr-2">●</span> Remote Updates Detected - Click to Refresh
     </div>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, currentRev = null, showCompleted = true, showHeaders = true, filterPastDue = false;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, editingIndex = null;
+
+        function setupPWA() {
+            const manifest = {
+                name: "to-do-txt",
+                short_name: "to-do-txt",
+                start_url: ".",
+                display: "standalone",
+                background_color: "#121212",
+                theme_color: "#1e1e1e",
+                icons: [
+                    { src: "assets/todo_txt_icon_64x64.png", sizes: "64x64", type: "image/png" },
+                    { src: "assets/todo_txt_icon_256x256.png", sizes: "256x256", type: "image/png", purpose: "any maskable" }
+                ]
+            };
+            const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
+            document.head.appendChild(link);
+        }
 
         async function init() {
+            setupPWA();
             const token = localStorage.getItem('dbx_token');
             if (token) startApp(token);
             else {
@@ -91,147 +120,133 @@
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
                     localStorage.setItem('dbx_token', resp.result.access_token);
                     window.location.href = REDIRECT_URI;
-                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold">Connect Dropbox</button></div>`;
+                } else document.getElementById('loginOverlay').classList.remove('hidden');
             }
         }
 
         function doLogin() { dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true).then(u => { localStorage.setItem('dbx_verifier', dbxAuth.getCodeVerifier()); window.location.href = u; }); }
         function doLogout() { localStorage.clear(); window.location.href = REDIRECT_URI; }
-        function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); setInterval(checkRemoteChanges, 15000); }
+        function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
 
         async function loadTasks() {
-            document.getElementById('remoteToast').classList.add('hidden');
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
-                currentRev = res.result.rev;
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) {}
-        }
-
-        async function checkRemoteChanges() {
-            if (isRawEditing || !currentRev) return;
-            try {
-                const meta = await dbx.filesGetMetadata({ path: '/todo.txt' });
-                if (meta.result.rev !== currentRev) document.getElementById('remoteToast').classList.remove('hidden');
-            } catch (e) {}
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 App Initialized"]; render(); }
         }
 
         async function saveTasks() {
-            try {
-                const res = await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                currentRev = res.result.rev;
-            } catch (e) {}
+            try { await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); } 
+            catch (e) { console.error(e); }
         }
 
         function getTaskMeta(text) {
-            const today = new Date().toISOString().split('T')[0];
             const p = text.match(/^\(([A-Z])\)/);
-            const dueMatch = text.match(/due:(\d{4}-\d{2}-\d{2})/);
-            return { 
-                priority: p ? p[1] : 'Z', 
-                isDone: text.startsWith('x '),
-                isHeader: text.trim().startsWith('#') || text.trim().startsWith('--'),
-                isPastDue: dueMatch && dueMatch[1] < today && !text.startsWith('x ')
-            };
+            const d = text.match(/due:(\d{4}-\d{2}-\d{2})/);
+            const pr = text.match(/\+(\w+)/);
+            return { priority: p ? p[1] : 'Z', due: d ? d[1] : '9999-12-31', project: pr ? pr[1] : 'ZZZ', isHeader: text.startsWith('#') };
         }
-
-        function render() {
-            const list = document.getElementById('todoList'), search = (document.getElementById('searchInput')?.value || "").toLowerCase();
-            let rawItems = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
-
-            let filteredItems = rawItems.filter(item => {
-                if (item.meta.isHeader) return showHeaders;
-                if (!showCompleted && item.meta.isDone) return false;
-                if (filterPastDue && !item.meta.isPastDue) return false;
-                if (search && !item.text.toLowerCase().includes(search)) return false;
-                for (let f of activeFilters) { if (!item.text.includes(f)) return false; }
-                return true;
-            });
-
-            list.innerHTML = filteredItems.map(item => {
-                if (item.meta.isHeader) return `<div class="header-line">${item.text.replace(/^[#\-\s]*/, '')}</div>`;
-                
-                const pClass = item.meta.isDone ? 'opacity-30 border-l-gray-800' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : 'prio-none');
-                
-                let content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>')
-                                         .replace(/(@\w+)/g, '<span class="text-green-500">$1</span>')
-                                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, m => `<span class="${item.meta.isPastDue ? 'text-red-500 font-bold' : 'text-yellow-500/80'}">${m}</span>`);
-                
-                content = content.replace(/(link:|https?:\/\/)([^\s]+)/g, (match, prefix, url) => {
-                    const fullUrl = prefix === 'link:' ? (url.startsWith('http') ? url : 'https://' + url) : prefix + url;
-                    return `<a href="${fullUrl}" target="_blank" class="task-link">link</a>`;
-                });
-                
-                return `<div class="task-row group flex items-center bg-[#1e1e1e]/50 border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#222]">
-                    <input type="checkbox" ${item.meta.isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
-                    <div class="flex-1 text-sm ${item.meta.isDone ? 'line-through text-gray-500 italic' : ''}" ondblclick="editTaskText(${item.originalIndex})">${content}</div>
-                    <div class="task-actions flex items-center px-2">
-                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 p-1">✕</button>
-                    </div>
-                </div>`;
-            }).join('');
-            updateSidebars();
-            document.getElementById('addBtn').className = (document.getElementById('newTodo').value.trim()) ? "bg-blue-600 text-white px-6 py-2 rounded font-bold text-sm" : "bg-[#2a2a2a] text-gray-500 px-6 py-2 rounded font-bold text-sm";
-            document.getElementById('addBtn').innerText = (document.getElementById('newTodo').value.trim()) ? "Add" : "Locked";
-        }
-
-        document.getElementById('newTodo').oninput = render;
 
         function toggleTask(i) {
             const today = new Date().toISOString().split('T')[0];
-            allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${today} ${allTasks[i]}`;
+            const doneRegex = /^x \d{4}-\d{2}-\d{2} /;
+            allTasks[i] = doneRegex.test(allTasks[i]) ? allTasks[i].replace(doneRegex, '') : `x ${today} ${allTasks[i]}`;
             render(); saveTasks();
         }
 
-        function deleteTask(i) {
-            if (confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); }
-        }
-
-        function editTaskText(i) {
-            const newVal = prompt("Edit Task:", allTasks[i]);
-            if (newVal) { allTasks[i] = newVal.trim(); render(); saveTasks(); }
-        }
+        function startEditing(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`)?.focus(), 10); }
+        function finishEditing(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
 
         function addTask() {
-            const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return;
-            allTasks.push(inp.value.trim());
-            inp.value = ""; render(); saveTasks();
+            const inp = document.getElementById('newTodo'); let text = inp.value.trim(); if (!text) return;
+            const today = new Date().toISOString().split('T')[0];
+            const prioMatch = text.match(/^\(([A-Z])\)\s*/);
+            if (prioMatch) {
+                const prio = prioMatch[0]; const rest = text.replace(prioMatch[0], '');
+                text = `${prio}${today} ${rest}`;
+            } else { text = `${today} ${text}`; }
+            allTasks.push(text); inp.value = ""; render(); saveTasks();
+        }
+
+        function downloadBackup() {
+            const blob = new Blob([allTasks.join('\n')], {type: 'text/plain'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = `todo-backup-${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+        }
+
+        function toggleCompletedVisibility() {
+            showCompleted = !showCompleted;
+            document.getElementById('doneToggle').innerText = showCompleted ? "Hide Done" : "Show Done";
+            render();
+        }
+
+        function render() {
+            const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
+            let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
+            
+            if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
+            if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+
+            list.innerHTML = display.map(item => {
+                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
+                const isDone = item.text.startsWith('x ');
+                const isEditing = editingIndex === item.originalIndex;
+                let content;
+                if (isEditing) {
+                    content = `<input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="flex-1 bg-[#0a0a0a] border border-blue-500 rounded px-2 py-0.5 text-sm outline-none text-white" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)">`;
+                } else {
+                    let hText = item.text
+                        .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>')
+                        .replace(/(\+\w+)/g, '<span class="text-blue-400 font-bold">$1</span>')
+                        .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
+                        .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>')
+                        .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
+                        // Updated link: keyword logic
+                        .replace(/link:((https?:\/\/|www\.)[^\s]+)/g, (match, url) => {
+                            const href = url.startsWith('www.') ? `http://${url}` : url;
+                            return `<a href="${href}" target="_blank" class="text-blue-500 underline hover:text-blue-400 inline-flex items-center gap-1 font-bold" onclick="event.stopPropagation()">link <span class="text-[10px]">↗️</span></a>`;
+                        });
+                    content = `<div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}" onclick="startEditing(${item.originalIndex})">${hText}</div>`;
+                }
+                const p = item.meta.priority;
+                const pClass = isDone ? 'border-l-gray-700 opacity-40' : (p === 'A' ? 'prio-a' : p === 'B' ? 'prio-b' : p === 'C' ? 'prio-c' : 'prio-none');
+                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525] rounded-r shadow-sm">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
+                    ${content}
+                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
+                </div>`;
+            }).join('');
+            updateSidebars();
         }
 
         function updateSidebars() {
-            const openT = allTasks.filter(t => !t.startsWith('x ') && !getTaskMeta(t).isHeader);
-            const pastDueCount = allTasks.filter(t => getTaskMeta(t).isPastDue).length;
-            
-            let metricsHTML = `<div class="text-blue-500 font-bold text-sm">Open: ${openT.length}</div>`;
-            if (pastDueCount > 0) {
-                metricsHTML += `<div onclick="togglePastDue()" class="cursor-pointer text-[10px] p-2 rounded-md font-black bg-red-900/30 text-red-500">⚠️ ${pastDueCount} PAST DUE</div>`;
-            }
-            document.getElementById('dashboardMetrics').innerHTML = metricsHTML;
-
-            const sb = (id, re, colorClass) => {
+            const open = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#'));
+            const sb = (id, re, c) => {
                 const items = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = items.map(v => {
-                    const count = openT.filter(t => t.includes(v)).length;
-                    return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer text-xs p-1 rounded hover:bg-gray-900 ${activeFilters.has(v) ? 'bg-blue-600/20 text-blue-400 font-bold' : colorClass}">${v} <span class="text-[10px] opacity-40">${count}</span></div>`;
+                    const count = open.filter(t => t.includes(v)).length;
+                    if (count === 0 && !activeFilters.has(v)) return "";
+                    return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has(v) ? 'text-white font-bold' : c + ' hover:text-white'}">
+                        <span>${v.replace('due:','')}</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded text-gray-400">${count}</span>
+                    </div>`;
                 }).join('');
             };
-            sb('priorityList', /\([A-Z]\)/g, 'text-orange-400/80'); 
-            sb('projectList', /\+\w+/g, 'text-blue-400/80'); 
-            sb('contextList', /@\w+/g, 'text-green-400/80');
+            sb('priorityList', /\([A-Z]\)/g, 'text-orange-400');
+            sb('dueList', /due:\d{4}-\d{2}-\d{2}/g, 'text-yellow-500');
+            sb('projectList', /\+\w+/g, 'text-blue-400');
+            sb('contextList', /@\w+/g, 'text-green-400');
         }
 
+        function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
-        function togglePastDue() { filterPastDue = !filterPastDue; render(); }
-        function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadersBtn').innerText = showHeaders ? "Hide Headers" : "Show Headers"; render(); }
-        function toggleCompletedVisibility() { showCompleted = !showCompleted; document.getElementById('toggleDoneBtn').innerText = showCompleted ? "Hide Done" : "Show Done"; render(); }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function doBackup() { const blob = new Blob([allTasks.join('\n')], {type: 'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'todo-backup.txt'; a.click(); }
-        function resetAll() { activeFilters.clear(); filterPastDue = false; document.getElementById('searchInput').value = ""; render(); }
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('hidden'); }
-
+        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         init();
     </script>
 </body>
