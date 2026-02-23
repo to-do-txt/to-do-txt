@@ -15,57 +15,72 @@
         .prio-a { border-left-color: #fb923c !important; }
         .prio-b { border-left-color: #facc15 !important; }
         .prio-none { border-left-color: #3b82f6 !important; }
+        
         #sidebar { transition: transform 0.3s ease-in-out; }
         @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
+        
         .task-row .task-actions { opacity: 0; transition: opacity 0.1s ease; }
         .task-row:hover .task-actions { opacity: 1; }
         @media (max-width: 768px) { .task-actions { opacity: 1; } }
+
+        /* Match the "Good" Header Styling */
+        .header-line {
+            padding-top: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #333;
+            margin-bottom: 0.75rem;
+            color: #3b82f6;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[9px] font-mono z-50 flex items-center gap-3 bg-[#0a0a0a]/90 px-3 py-1.5 rounded-full border border-[#333]">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText" class="text-gray-500">v3.5.0 | Stable</div>
+        <div id="statusText" class="text-gray-500 font-mono">v3.5.1</div>
     </div>
 
-    <header class="p-4 bg-[#1e1e1e] border-b border-[#333] z-40">
-        <div class="max-w-4xl mx-auto flex flex-col gap-3">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <button onclick="toggleSidebar()" class="md:hidden text-gray-400 text-xl">☰</button>
-                    <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetAll()">to-do-txt</div>
-                </div>
-                <div class="flex gap-4 text-[10px] font-bold uppercase text-gray-500">
-                    <button onclick="toggleCompletedVisibility()" id="toggleDoneBtn" class="hover:text-purple-400">Hide Done</button>
-                    <button onclick="toggleRawEdit()" class="hover:text-orange-400">Raw File</button>
-                    <button onclick="doLogout()" class="hover:text-red-400">Logout</button>
+    <header class="p-6 bg-[#121212] z-40">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex items-center justify-between mb-6">
+                <button onclick="toggleSidebar()" class="md:hidden text-gray-400 text-xl">☰</button>
+                <div class="font-bold text-xl text-blue-500 tracking-tighter cursor-pointer mx-auto md:mx-0" onclick="resetAll()">to-do-txt</div>
+                <div class="hidden md:flex gap-6 text-[10px] font-bold uppercase text-gray-500">
+                    <button onclick="toggleCompletedVisibility()" id="toggleDoneBtn" class="hover:text-blue-400">Hide Done</button>
+                    <button onclick="toggleRawEdit()" class="hover:text-blue-400">Raw File</button>
+                    <button onclick="doLogout()" class="hover:text-red-500">Logout</button>
                 </div>
             </div>
             
-            <input type="text" id="searchInput" oninput="render()" placeholder="Filter tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
-            
-            <div class="flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
-                <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500 transition">Add</button>
+            <div class="space-y-3">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Filter tasks..." class="w-full bg-[#0a0a0a] border border-[#222] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white shadow-inner">
+                
+                <div class="flex gap-2">
+                    <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 bg-[#0a0a0a] border border-[#222] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500 transition shadow-lg">Add</button>
+                </div>
             </div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-6 z-50 border-r border-[#333] md:relative md:translate-x-0 md:block overflow-y-auto">
-            <div id="dashboardMetrics" class="mb-8 space-y-2"></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1"></div></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1"></div></div>
-            <div><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1"></div></div>
+        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-8 z-50 border-r border-[#1e1e1e] md:relative md:translate-x-0 md:block overflow-y-auto">
+            <div id="dashboardMetrics" class="mb-10 space-y-3"></div>
+            <div class="mb-10"><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-[0.2em]">Priority</h2><div id="priorityList" class="space-y-2"></div></div>
+            <div class="mb-10"><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-[0.2em]">Projects</h2><div id="projectList" class="space-y-2"></div></div>
+            <div><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-[0.2em]">Contexts</h2><div id="contextList" class="space-y-2"></div></div>
         </aside>
 
-        <main class="flex-1 overflow-y-auto p-4 md:p-8">
-            <div id="todoList" class="max-w-3xl mx-auto space-y-1"></div>
+        <main class="flex-1 overflow-y-auto bg-[#121212] p-4 md:p-8">
+            <div id="todoList" class="max-w-4xl mx-auto space-y-1"></div>
             
-            <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-3xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none h-[60vh]"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 py-3 rounded text-xs font-bold uppercase tracking-widest">Save Changes</button>
+            <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
+                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-6 border border-[#222] rounded outline-none h-[60vh]"></textarea>
+                <button onclick="saveRawEdit()" class="mt-4 bg-blue-600 py-3 rounded text-xs font-bold uppercase tracking-widest">Update todo.txt</button>
             </div>
         </main>
     </div>
@@ -87,7 +102,7 @@
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
                     localStorage.setItem('dbx_token', resp.result.access_token);
                     window.location.href = REDIRECT_URI;
-                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold">Connect Dropbox</button></div>`;
+                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold hover:bg-blue-500 transition">Connect Dropbox</button></div>`;
             }
         }
 
@@ -137,7 +152,7 @@
             return { 
                 priority: p ? p[1] : 'Z', 
                 isDone: text.startsWith('x '),
-                isHeader: text.startsWith('#'),
+                isHeader: text.trim().startsWith('#') || text.trim().startsWith('--'),
                 isPastDue: dueMatch && dueMatch[1] < today && !text.startsWith('x ')
             };
         }
@@ -148,23 +163,25 @@
 
             if (!showCompleted) display = display.filter(t => !t.meta.isDone || t.meta.isHeader);
             if (filterPastDue) display = display.filter(t => t.meta.isPastDue || t.meta.isHeader);
+            
+            // Re-apply Filters logic
             activeFilters.forEach(f => display = display.filter(t => t.text.includes(f) || t.meta.isHeader));
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
             
             list.innerHTML = display.map(item => {
                 if (item.meta.isHeader) {
-                    return `<div class="pt-8 pb-1 border-b border-[#333] mb-3 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^#+\s*/, '')}</div>`;
+                    return `<div class="header-line">${item.text.replace(/^[#\-\s]*/, '')}</div>`;
                 }
-                const pClass = item.meta.isDone ? 'opacity-40 border-l-gray-700' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : 'prio-none');
+                const pClass = item.meta.isDone ? 'opacity-30 border-l-gray-800' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : 'prio-none');
                 const content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>')
-                                         .replace(/(@\w+)/g, '<span class="text-green-400">$1</span>')
-                                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, m => `<span class="${item.meta.isPastDue ? 'text-red-500 font-bold underline' : 'text-yellow-500'}">${m}</span>`);
+                                         .replace(/(@\w+)/g, '<span class="text-green-500">$1</span>')
+                                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, m => `<span class="${item.meta.isPastDue ? 'text-red-500 font-bold' : 'text-yellow-500/80'}">${m}</span>`);
                 
-                return `<div class="task-row group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#252525] transition-colors">
-                    <input type="checkbox" ${item.meta.isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-3 accent-blue-500 cursor-pointer">
+                return `<div class="task-row group flex items-center bg-[#1e1e1e]/50 border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#222] transition-all">
+                    <input type="checkbox" ${item.meta.isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-sm ${item.meta.isDone ? 'line-through text-gray-500 italic' : ''}" ondblclick="editTaskText(${item.originalIndex})">${content}</div>
                     <div class="task-actions flex items-center px-2">
-                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 text-lg leading-none">✕</button>
+                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 transition-colors p-1">✕</button>
                     </div>
                 </div>`;
             }).join('');
@@ -182,35 +199,36 @@
         }
 
         function editTaskText(i) {
-            const newVal = prompt("Edit:", allTasks[i]);
+            const newVal = prompt("Edit Task:", allTasks[i]);
             if (newVal) { allTasks[i] = newVal.trim(); render(); saveTasks(); }
         }
 
         function addTask() {
             const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return;
-            const today = new Date().toISOString().split('T')[0];
-            allTasks.push(`${today} ${inp.value.trim()}`);
+            allTasks.push(inp.value.trim());
             inp.value = ""; render(); saveTasks();
         }
 
         function updateSidebars() {
-            const openT = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#'));
+            const openT = allTasks.filter(t => !t.startsWith('x ') && !getTaskMeta(t).isHeader);
             const pastDueCount = allTasks.filter(t => getTaskMeta(t).isPastDue).length;
             
-            let metricsHTML = `<div class="text-blue-400 font-bold text-sm">Open: ${openT.length}</div>`;
+            let metricsHTML = `<div class="text-blue-500 font-bold text-sm">Open: ${openT.length}</div>`;
             if (pastDueCount > 0) {
-                metricsHTML += `<div onclick="togglePastDue()" class="cursor-pointer text-[10px] p-2 rounded font-black uppercase tracking-widest ${filterPastDue ? 'bg-red-600 text-white' : 'bg-red-900/20 text-red-500 hover:bg-red-900/40'} transition">⚠️ ${pastDueCount} Past Due</div>`;
+                metricsHTML += `<div onclick="togglePastDue()" class="cursor-pointer text-[10px] p-2 rounded-md font-black uppercase tracking-widest ${filterPastDue ? 'bg-red-600 text-white' : 'bg-red-900/30 text-red-500 hover:bg-red-900/50'} transition">⚠️ ${pastDueCount} Past Due</div>`;
             }
             document.getElementById('dashboardMetrics').innerHTML = metricsHTML;
 
-            const sb = (id, re, c) => {
+            const sb = (id, re, colorClass) => {
                 const items = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = items.map(v => {
                     const count = openT.filter(t => t.includes(v)).length;
-                    return count > 0 || activeFilters.has(v) ? `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer text-[11px] p-1.5 rounded mb-1 transition ${activeFilters.has(v) ? 'bg-blue-600 text-white font-bold' : c + ' hover:bg-gray-800'}">${v} <span class="opacity-50">${count}</span></div>` : "";
+                    return count > 0 || activeFilters.has(v) ? `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer text-xs p-1 rounded hover:bg-gray-900 transition ${activeFilters.has(v) ? 'bg-blue-600/20 text-blue-400 font-bold' : colorClass}">${v} <span class="text-[10px] opacity-40">${count}</span></div>` : "";
                 }).join('');
             };
-            sb('priorityList', /\([A-Z]\)/g, 'text-orange-400'); sb('projectList', /\+\w+/g, 'text-blue-400'); sb('contextList', /@\w+/g, 'text-green-400');
+            sb('priorityList', /\([A-Z]\)/g, 'text-orange-400/80'); 
+            sb('projectList', /\+\w+/g, 'text-blue-400/80'); 
+            sb('contextList', /@\w+/g, 'text-green-400/80');
         }
 
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
