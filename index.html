@@ -1,30 +1,72 @@
-// This updated render function highlights tags to match the sidebar colors
-function render() {
-    const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
-    let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
+// --- CRITICAL FIX: Robust Checkbox Logic ---
+function toggleTask(i) {
+    const today = new Date().toISOString().split('T')[0];
+    let task = allTasks[i];
 
-    // ... (Filter and Sort logic remains same as v2.8.0) ...
+    // This regex looks for 'x' followed by a date at the start of the string
+    const doneRegex = /^x \d{4}-\d{2}-\d{2} /;
+
+    if (doneRegex.test(task)) {
+        // UNCHECKING: Remove the 'x 2026-02-22 ' prefix
+        allTasks[i] = task.replace(doneRegex, '');
+    } else {
+        // CHECKING: Add the prefix
+        allTasks[i] = `x ${today} ${task}`;
+    }
+    
+    render();
+    saveTasks();
+}
+
+// --- UPDATED RENDER: Precise Color Matching ---
+function render() {
+    const list = document.getElementById('todoList');
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    
+    let display = allTasks.map((text, originalIndex) => ({ 
+        text, 
+        originalIndex, 
+        meta: getTaskMeta(text) 
+    }));
+
+    // Filtering & Sorting (Same as v2.7.2/2.8.0)
+    if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+    activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
+    if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
     list.innerHTML = display.map(item => {
-        if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-xs tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
+        // Render Markdown Headers
+        if (item.meta.isHeader) {
+            return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-xs tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
+        }
         
         const isDone = item.text.startsWith('x ');
         
-        // HIGHLIGHT LOGIC: Wrap tags in spans with colors matching the sidebar
+        // Tag Highlighting with Exact Sidebar Colors
         let highlightedText = item.text
-            .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>') // Priorities (Orange)
-            .replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>')                 // Projects (Blue)
-            .replace(/(@\w+)/g, '<span class="text-green-400">$1</span>')                // Contexts (Green)
-            .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>'); // Due Dates (Yellow)
+            .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>') // Priorities
+            .replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>')                 // Projects
+            .replace(/(@\w+)/g, '<span class="text-green-400">$1</span>')                // Contexts
+            .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>'); // Due
 
+        // Border Priority Colors
         const p = item.meta.priority;
-        const pClass = isDone ? 'border-l-gray-700 opacity-40' : (p === 'A' ? 'prio-a' : p === 'B' ? 'prio-b' : p === 'C' ? 'prio-c' : 'prio-none');
+        const pClass = isDone ? 'border-l-gray-700 opacity-40' : 
+                      (p === 'A' ? 'border-l-orange-400' : 
+                       p === 'B' ? 'border-l-yellow-400' : 
+                       p === 'C' ? 'border-l-green-400' : 'border-l-blue-600');
 
-        return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525]">
-            <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 cursor-pointer">
-            <div class="flex-1 text-sm ${isDone ? 'line-through text-gray-500' : ''}">${highlightedText}</div>
-            <button onclick="deleteTask(${item.originalIndex})" class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-all">✕</button>
-        </div>`;
+        return `
+            <div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525] transition-colors">
+                <input type="checkbox" ${isDone ? 'checked' : ''} 
+                    onchange="toggleTask(${item.originalIndex})" 
+                    class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
+                <div class="flex-1 text-sm ${isDone ? 'line-through text-gray-500 font-mono italic' : ''}">
+                    ${highlightedText}
+                </div>
+                <button onclick="deleteTask(${item.originalIndex})" class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
+            </div>`;
     }).join('');
+    
     updateSidebars();
 }
