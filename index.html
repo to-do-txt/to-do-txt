@@ -9,17 +9,15 @@
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
-    <div class="fixed bottom-2 right-4 text-[10px] text-gray-600 font-mono z-50 bg-[#121212] px-2 py-1 rounded border border-gray-800">
-        BUILD: v1.1.0-stable
+    <div class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
+        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
+        <div id="statusText" class="text-gray-500">v1.2.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 shadow-2xl">
             <h1 class="text-3xl font-bold mb-2 text-blue-500">DropDotTxt</h1>
-            <p class="text-gray-400 mb-8">Connect to sync your todo.txt</p>
-            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all">
-                Connect Dropbox
-            </button>
+            <button onclick="doLogin()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-3 rounded-lg font-bold transition-all">Connect Dropbox</button>
         </div>
     </div>
 
@@ -27,7 +25,7 @@
         <div class="max-w-5xl mx-auto flex items-center gap-6">
             <div class="font-bold text-xl text-blue-500 tracking-tight">DropDotTxt</div>
             <div class="flex-1 flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task... (A) Task +Project @Context" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm transition-all">
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task... (A) Important +Project @Context" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button id="addBtn" onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-colors">Add</button>
             </div>
             <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400">Logout</button>
@@ -43,8 +41,7 @@
         </aside>
 
         <main class="flex-1 p-6 overflow-y-auto bg-[#121212]">
-            <div id="todoList" class="space-y-1 max-w-4xl mx-auto"></div>
-            <div id="status" class="text-center text-[10px] text-gray-600 mt-4 uppercase tracking-widest h-4"></div>
+            <div id="todoList" class="space-y-1 max-w-4xl mx-auto pb-20"></div>
         </main>
     </div>
 
@@ -54,6 +51,13 @@
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx;
         let allTasks = [];
+
+        function setStatus(msg, type = 'idle') {
+            const indicator = document.getElementById('syncIndicator');
+            const text = document.getElementById('statusText');
+            text.innerText = msg;
+            indicator.className = `w-2 h-2 rounded-full ${type === 'error' ? 'bg-red-500' : type === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`;
+        }
 
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -95,38 +99,33 @@
         }
 
         async function loadTasks() {
+            setStatus('Loading...', 'syncing');
             try {
-                // We use an empty path "" or "/todo.txt" for App Folders
                 const response = await dbx.filesDownload({ path: '/todo.txt' });
                 const text = await response.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
+                setStatus('v1.2.0-stable');
                 render();
             } catch (e) {
-                allTasks = ["(A) App Connected! Add a task to sync."];
+                allTasks = ["(A) App Connected! Add a task to begin."];
+                setStatus('Ready');
                 render();
             }
         }
 
         async function saveTasks() {
-            const statusBox = document.getElementById('status');
-            statusBox.innerText = "Syncing...";
-            
+            setStatus('Syncing...', 'syncing');
             try {
                 const content = allTasks.join('\n');
-                // Creating a proper File object helps Dropbox recognize the upload
-                const fileContent = new Blob([content], { type: 'text/plain' });
-                
                 await dbx.filesUpload({ 
                     path: '/todo.txt', 
-                    contents: fileContent, 
-                    mode: { ".tag": "overwrite" },
-                    mute: true
+                    contents: content, 
+                    mode: { ".tag": "overwrite" }
                 });
-                statusBox.innerText = "Synced to Dropbox";
-                setTimeout(() => { if(statusBox.innerText === "Synced to Dropbox") statusBox.innerText = ""; }, 3000);
+                setStatus('Synced');
+                setTimeout(() => setStatus('v1.2.0-stable'), 2000);
             } catch (error) {
-                console.error("Save Error:", error);
-                statusBox.innerText = "Sync Failed - Check Permissions";
+                setStatus('Sync Error', 'error');
             }
         }
 
@@ -134,11 +133,24 @@
             const input = document.getElementById('newTodo');
             const val = input.value.trim();
             if (!val) return;
-            
             if (allTasks.length === 1 && allTasks[0].includes("App Connected")) allTasks = [];
-
             allTasks.push(val);
             input.value = "";
+            render();
+            saveTasks();
+        }
+
+        function toggleTask(index) {
+            let task = allTasks[index];
+            const today = new Date().toISOString().split('T')[0];
+            
+            if (task.startsWith('x ')) {
+                // Uncheck: Remove 'x YYYY-MM-DD '
+                allTasks[index] = task.replace(/^x \d{4}-\d{2}-\d{2} /, '');
+            } else {
+                // Check: Prepend 'x YYYY-MM-DD '
+                allTasks[index] = `x ${today} ${task}`;
+            }
             render();
             saveTasks();
         }
@@ -151,21 +163,35 @@
 
         function render() {
             const list = document.getElementById('todoList');
-            allTasks.sort();
+            // Sort: Uncompleted (alphabetical) then completed
+            allTasks.sort((a, b) => {
+                if (a.startsWith('x ') && !b.startsWith('x ')) return 1;
+                if (!a.startsWith('x ') && b.startsWith('x ')) return -1;
+                return a.localeCompare(b);
+            });
+
             list.innerHTML = allTasks.map((t, i) => {
+                const isDone = t.startsWith('x ');
                 let color = "border-l-blue-600";
-                if(t.startsWith("(A)")) color = "border-l-red-500 text-red-400 font-bold";
-                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 hover:bg-[#252525] transition-all">
-                    <span class="flex-1 text-sm font-medium">${t}</span>
-                    <button onclick="deleteTask(${i})" class="text-gray-600 hover:text-red-500 px-2 transition-colors">✕</button>
+                if(isDone) color = "border-l-gray-700 opacity-50";
+                else if(t.startsWith("(A)")) color = "border-l-red-500 text-red-400 font-bold";
+                else if(t.startsWith("(B)")) color = "border-l-orange-400";
+
+                return `
+                <div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 hover:bg-[#252525] transition-all">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} 
+                           onclick="toggleTask(${i})" 
+                           class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
+                    <span class="flex-1 text-sm font-medium ${isDone ? 'line-through text-gray-500' : ''}">${t}</span>
+                    <button onclick="deleteTask(${i})" class="text-gray-600 hover:text-red-500 px-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             
             const text = allTasks.join(' ');
             const projects = [...new Set(text.match(/\+\w+/g))];
             const contexts = [...new Set(text.match(/@\w+/g))];
-            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div>${p}</div>`).join('');
-            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div>${c}</div>`).join('');
+            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div class="hover:text-white cursor-default">${p}</div>`).join('');
+            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div class="hover:text-white cursor-default">${c}</div>`).join('');
         }
 
         init();
