@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.3.3</title>
+    <title>to-do-txt v3.4.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <meta name="theme-color" content="#1e1e1e">
@@ -27,7 +27,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText">v3.3.3</div>
+        <div id="statusText">v3.4.0</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
@@ -49,11 +49,18 @@
                         <button onclick="loadTasks()" id="syncBtn" class="text-[9px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 text-gray-400 uppercase tracking-tighter transition-all">Sync</button>
                     </div>
                 </div>
-                <div class="flex items-center gap-4 text-[9px] font-bold uppercase tracking-widest">
-                    <button id="resetBtn" onclick="resetAll()" class="text-red-400 hidden">Reset Filters</button>
+                <div class="flex items-center gap-3 text-[9px] font-bold uppercase tracking-widest">
+                    <select id="sortSelect" onchange="setSort(this.value)" class="bg-transparent border border-gray-700 text-gray-400 px-2 py-1 rounded outline-none focus:border-blue-500 cursor-pointer">
+                        <option value="file">File Order</option>
+                        <option value="priority">Priority</option>
+                        <option value="due">Due Date</option>
+                        <option value="project">Project</option>
+                        <option value="context">Context</option>
+                    </select>
+                    <button id="resetBtn" onclick="resetAll()" class="text-red-400 hidden">Reset</button>
                     <button onclick="downloadBackup()" class="text-blue-400">Backup</button>
-                    <button onclick="toggleHeaderVisibility()" id="headerToggle" class="text-green-400">Hide Headers</button>
-                    <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
+                    <button onclick="toggleHeaderVisibility()" id="headerToggle" class="text-green-400">Headers</button>
+                    <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-400">Raw</button>
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
@@ -103,7 +110,7 @@
         const REGEX_DUE = /due:\d{4}[-.]\d{2}[-.]\d{2}/g;
         const REGEX_LINK = /link:(https?:\/\/[^\s]+|www\.[^\s]+)/g;
 
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null, lastServerTag = null, suggestionIndex = -1, isSyncing = false;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null, lastServerTag = null, suggestionIndex = -1, isSyncing = false, currentSort = 'file';
 
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -182,6 +189,7 @@
             const p = text.match(REGEX_PRIO_START);
             const d = text.match(/due:(\d{4})[-.](\d{2})[-.](\d{2})/);
             const pr = text.match(REGEX_PROJECT);
+            const ctx = text.match(REGEX_CONTEXT);
             const isHeader = text.startsWith('#') || text.startsWith('--');
             let isPastDue = false;
             if (d) { 
@@ -189,21 +197,31 @@
                 const today = new Date(); today.setHours(0,0,0,0);
                 if (due < today && !text.startsWith('x ')) isPastDue = true;
             }
-            return { priority: p ? p[1] : 'Z', due: d ? d[0] : '9999-12-31', project: pr ? pr[0] : 'ZZZ', isHeader, isPastDue };
+            return { 
+                priority: p ? p[1] : 'Z', 
+                due: d ? d[0].replace('due:', '') : '9999-12-31', 
+                project: pr ? pr[0] : 'ZZZ', 
+                context: ctx ? ctx[0] : 'ZZZ',
+                isHeader, 
+                isPastDue 
+            };
+        }
+
+        function setSort(val) {
+            currentSort = val;
+            render();
         }
 
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             const resetBtn = document.getElementById('resetBtn');
             
-            // Show/Hide Reset Button
-            if (activeFilters.size > 0 || search.length > 0) {
-                resetBtn.classList.remove('hidden');
-            } else {
-                resetBtn.classList.add('hidden');
-            }
+            if (activeFilters.size > 0 || search.length > 0) resetBtn.classList.remove('hidden');
+            else resetBtn.classList.add('hidden');
 
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
+            
+            // Filter
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
             activeFilters.forEach(f => { 
@@ -211,6 +229,18 @@
                 else display = display.filter(t => t.text.includes(f) || t.meta.isHeader); 
             });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+
+            // Sort (UI Only)
+            if (currentSort !== 'file') {
+                display.sort((a, b) => {
+                    if (a.meta.isHeader || b.meta.isHeader) return 0; // Keep headers in place relative to surroundings
+                    if (currentSort === 'priority') return a.meta.priority.localeCompare(b.meta.priority);
+                    if (currentSort === 'due') return a.meta.due.localeCompare(b.meta.due);
+                    if (currentSort === 'project') return a.meta.project.localeCompare(b.meta.project);
+                    if (currentSort === 'context') return a.meta.context.localeCompare(b.meta.context);
+                    return 0;
+                });
+            }
 
             list.innerHTML = display.map(item => {
                 if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
@@ -313,11 +343,11 @@
         function deleteTask(i) { if(confirm('Delete?')) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
-        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
+        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; document.getElementById('sortSelect').value = "file"; currentSort = 'file'; render(); }
         function startEditing(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`)?.focus(), 10); }
         function finishEditing(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
-        function toggleCompletedVisibility() { showCompleted = !showCompleted; document.getElementById('doneToggle').innerText = showCompleted ? "Hide Done" : "Show Done"; render(); }
-        function toggleHeaderVisibility() { showHeaders = !showHeaders; document.getElementById('headerToggle').innerText = showHeaders ? "Hide Headers" : "Show Headers"; render(); }
+        function toggleCompletedVisibility() { showCompleted = !showCompleted; document.getElementById('doneToggle').innerText = showCompleted ? "Done" : "Show Done"; render(); }
+        function toggleHeaderVisibility() { showHeaders = !showHeaders; document.getElementById('headerToggle').innerText = showHeaders ? "Headers" : "Show Headers"; render(); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function downloadBackup() { const blob = new Blob([allTasks.join('\n')], {type: 'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `todo-backup.txt`; a.click(); }
