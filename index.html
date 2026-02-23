@@ -10,18 +10,23 @@
         .suggestion-box { position: absolute; z-index: 100; background: #1e1e1e; border: 1px solid #333; border-radius: 4px; max-height: 150px; overflow-y: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 12px; }
         .suggestion-item:hover { background: #2563eb; color: white; }
+        /* Custom scrollbar for a pro look */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #121212; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v1.7.0-stable</div>
+        <div id="statusText" class="text-gray-500">v1.8.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800">
-            <h1 class="text-3xl font-bold mb-4 text-blue-500">DropDotTxt</h1>
+            <h1 class="text-3xl font-bold mb-4 text-blue-500 text-3xl">DropDotTxt</h1>
             <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold">Connect Dropbox</button>
         </div>
     </div>
@@ -34,15 +39,18 @@
                     <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-10 py-1.5 text-xs outline-none focus:border-blue-500">
                     <span class="absolute left-4 top-2 text-gray-600 text-xs">🔍</span>
                 </div>
-                <button onclick="doLogout()" class="text-[10px] text-gray-500 hover:text-red-400 font-bold uppercase">Logout</button>
+                <div class="flex items-center gap-4">
+                    <button onclick="downloadBackup()" class="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest transition-colors">Backup</button>
+                    <button onclick="doLogout()" class="text-[10px] text-gray-500 hover:text-red-400 font-bold uppercase tracking-widest transition-colors">Logout</button>
+                </div>
             </div>
 
             <div class="flex gap-2 items-center relative">
                 <input type="text" id="newTodo" autocomplete="off" oninput="handleInput(event, this)" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
-                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm">Add</button>
+                <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-all">Add</button>
                 <div id="filterTag" class="hidden flex items-center bg-blue-900/40 text-blue-400 border border-blue-500 px-3 py-1 rounded text-xs font-bold gap-2">
                     <span id="activeFilterName"></span>
-                    <button onclick="clearFilter()">✕</button>
+                    <button onclick="clearFilter()" class="hover:text-white">✕</button>
                 </div>
                 <div id="suggestions" class="suggestion-box hidden"></div>
             </div>
@@ -78,16 +86,21 @@
 
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
-            const token = localStorage.getItem('dbx_token') || (urlParams.get('code') ? null : null);
+            const token = localStorage.getItem('dbx_token');
             if (token) startApp(token);
             else if (urlParams.get('code')) {
+                const verifier = localStorage.getItem('dbx_verifier');
+                dbxAuth.setCodeVerifier(verifier);
                 const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
                 localStorage.setItem('dbx_token', resp.result.access_token);
                 window.location.href = REDIRECT_URI;
             } else document.getElementById('loginOverlay').classList.remove('hidden');
         }
 
-        function doLogin() { dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true).then(u => window.location.href = u); }
+        function doLogin() { dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true).then(u => {
+            localStorage.setItem('dbx_verifier', dbxAuth.getCodeVerifier());
+            window.location.href = u;
+        }); }
         function doLogout() { localStorage.clear(); window.location.href = REDIRECT_URI; }
         function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
 
@@ -96,16 +109,27 @@
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 allTasks = (await res.result.fileBlob.text()).split('\n').filter(t => t.trim() !== "");
-                setStatus('v1.7.0-stable'); render();
-            } catch (e) { allTasks = ["(A) Welcome!"]; render(); }
+                setStatus('v1.8.0-stable'); render();
+            } catch (e) { allTasks = ["(A) App Connected!"]; render(); }
         }
 
         async function saveTasks() {
             setStatus('Syncing...', 'syncing');
             try {
                 await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                setStatus('Synced'); setTimeout(() => setStatus('v1.7.0-stable'), 2000);
+                setStatus('Synced'); setTimeout(() => setStatus('v1.8.0-stable'), 2000);
             } catch (e) { setStatus('Sync Error', 'error'); }
+        }
+
+        function downloadBackup() {
+            const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const date = new Date().toISOString().split('T')[0];
+            a.href = url;
+            a.download = `todo-backup-${date}.txt`;
+            a.click();
+            window.URL.revokeObjectURL(url);
         }
 
         function addTask() {
@@ -115,60 +139,38 @@
             hideSuggestions(); render(); saveTasks();
         }
 
-        // --- SUGGESTION LOGIC ---
         function handleInput(e, inputEl) {
             const val = inputEl.value;
             const cursor = inputEl.selectionStart;
-            const before = val.substring(0, cursor);
-            const words = before.split(/\s/);
+            const words = val.substring(0, cursor).split(/\s/);
             const lastWord = words[words.length - 1];
-
-            if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
-                showSuggestions(lastWord, inputEl);
-            } else {
-                hideSuggestions();
-            }
+            if (lastWord.startsWith('@') || lastWord.startsWith('+')) showSuggestions(lastWord, inputEl);
+            else hideSuggestions();
         }
 
         function showSuggestions(query, inputEl) {
             suggestionTarget = inputEl;
-            const fullText = allTasks.join(' ');
-            const type = query[0]; // @ or +
-            const regex = type === '@' ? /@\w+/g : /\+\w+/g;
-            const matches = [...new Set(fullText.match(regex))].filter(m => m.toLowerCase().includes(query.toLowerCase()));
-
+            const type = query[0];
+            const matches = [...new Set(allTasks.join(' ').match(type === '@' ? /@\w+/g : /\+\w+/g))].filter(m => m.toLowerCase().includes(query.toLowerCase()));
             const box = inputEl.id === 'newTodo' ? document.getElementById('suggestions') : document.getElementById('inlineSuggestions');
             if (matches.length === 0) { box.classList.add('hidden'); return; }
-
             if (inputEl.id !== 'newTodo') {
                 const rect = inputEl.getBoundingClientRect();
-                box.style.left = `${rect.left}px`;
-                box.style.top = `${rect.bottom + window.scrollY}px`;
-                box.style.width = `${rect.width}px`;
-            } else {
-                box.style.bottom = "-155px"; box.style.left = "0"; box.style.width = "100%";
-            }
-
+                box.style.left = `${rect.left}px`; box.style.top = `${rect.bottom + window.scrollY}px`; box.style.width = `${rect.width}px`;
+            } else { box.style.bottom = "-155px"; box.style.left = "0"; box.style.width = "100%"; }
             box.innerHTML = matches.map(m => `<div class="suggestion-item" onclick="applySuggestion('${m}')">${m}</div>`).join('');
             box.classList.remove('hidden');
         }
 
         function applySuggestion(word) {
             const val = suggestionTarget.value;
-            const cursor = suggestionTarget.selectionStart;
-            const before = val.substring(0, cursor);
-            const after = val.substring(cursor);
-            const words = before.split(/\s/);
+            const words = val.substring(0, suggestionTarget.selectionStart).split(/\s/);
             words[words.length - 1] = word;
-            suggestionTarget.value = words.join(' ') + " " + after;
-            suggestionTarget.focus();
-            hideSuggestions();
+            suggestionTarget.value = words.join(' ') + " " + val.substring(suggestionTarget.selectionStart);
+            suggestionTarget.focus(); hideSuggestions();
         }
 
-        function hideSuggestions() {
-            document.getElementById('suggestions').classList.add('hidden');
-            document.getElementById('inlineSuggestions').classList.add('hidden');
-        }
+        function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); document.getElementById('inlineSuggestions').classList.add('hidden'); }
 
         function render() {
             const list = document.getElementById('todoList');
@@ -180,26 +182,25 @@
             list.innerHTML = display.map(item => {
                 const isDone = item.text.startsWith('x ');
                 const color = isDone ? 'border-l-gray-700 opacity-50' : item.text.startsWith('(A)') ? 'border-l-red-500 text-red-400 font-bold' : 'border-l-blue-600';
-                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3">
-                    <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 accent-blue-500">
+                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 transition-all hover:bg-[#252525]">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
                     <input type="text" value="${item.text.replace(/"/g, '&quot;')}" 
                            oninput="handleInput(event, this)"
                            onblur="setTimeout(() => { updateTaskText(${item.originalIndex}, this.value); hideSuggestions(); }, 200)"
                            onkeypress="if(event.key === 'Enter') this.blur()"
                            class="flex-1 bg-transparent outline-none ${isDone ? 'line-through text-gray-500' : ''} text-sm">
-                    <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 px-2 opacity-0 group-hover:opacity-100">✕</button>
+                    <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 px-2 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                 </div>`;
             }).join('');
 
             const ft = allTasks.join(' ');
             const sidebar = (id, re, c) => {
-                const matches = [...new Set(ft.match(re))].sort();
-                document.getElementById(id).innerHTML = matches.map(m => `<div onclick="setFilter('${m}')" class="cursor-pointer ${c} hover:text-white truncate">${m.replace('due:','')}</div>`).join('');
+                const m = [...new Set(ft.match(re))].sort();
+                document.getElementById(id).innerHTML = m.map(v => `<div onclick="setFilter('${v}')" class="cursor-pointer ${c} hover:text-white truncate transition-colors">${v.replace('due:','')}</div>`).join('');
             };
             sidebar('dueList', /due:\d{4}-\d{2}-\d{2}/g, 'text-yellow-500');
             sidebar('projectList', /\+\w+/g, 'text-blue-400');
             sidebar('contextList', /@\w+/g, 'text-green-400');
-            
             document.getElementById('filterTag').className = currentFilter ? 'flex items-center bg-blue-900/40 text-blue-400 border border-blue-500 px-3 py-1 rounded text-xs font-bold gap-2' : 'hidden';
             document.getElementById('activeFilterName').innerText = currentFilter || '';
         }
