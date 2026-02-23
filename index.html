@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.2.8</title>
+    <title>to-do-txt v3.3.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <meta name="theme-color" content="#1e1e1e">
@@ -28,15 +28,16 @@
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
-        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.2.8</div>
-        <div id="lastSync" class="border-l border-gray-800 pl-2">Syncing...</div>
+        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
+        <div id="statusText">v3.3.0</div>
+        <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 mx-4">
             <h1 class="text-2xl font-bold mb-4 text-blue-500 font-black tracking-tighter">to-do-txt</h1>
-            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white shadow-lg">Connect Dropbox</button>
+            <p class="text-gray-400 text-sm mb-6">Connect your Dropbox to sync todo.txt</p>
+            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white shadow-lg hover:bg-blue-500 transition-colors">Connect Dropbox</button>
         </div>
     </div>
 
@@ -98,17 +99,37 @@
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         
         const REGEX_PRIO_START = /^\(([A-Z])\)/;
-        const REGEX_PROJECT = /\+\S+/g;
-        const REGEX_CONTEXT = /@\S+/g;
+        const REGEX_PROJECT = /\+[\w\-\.\/]+/g; // Support dashes/dots in projects
+        const REGEX_CONTEXT = /@[\w\-\.\/]+/g; // Support dashes/dots in contexts
         const REGEX_DUE = /due:\d{4}[-.]\d{2}[-.]\d{2}/g;
-        const REGEX_LINK = /link:(https?:\/\/[^\s]+)/g;
+        const REGEX_LINK = /link:(https?:\/\/[^\s]+|www\.[^\s]+)/g;
 
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null, lastServerTag = null, suggestionIndex = -1, isSyncing = false;
 
         async function init() {
+            const urlParams = new URLSearchParams(window.location.search);
             const token = localStorage.getItem('dbx_token');
-            if (token) { startApp(token); window.addEventListener('focus', checkForChanges); setInterval(checkForChanges, 30000); } 
-            else { const urlParams = new URLSearchParams(window.location.search); if (urlParams.get('code')) { const verifier = localStorage.getItem('dbx_verifier'); dbxAuth.setCodeVerifier(verifier); const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code')); localStorage.setItem('dbx_token', resp.result.access_token); window.location.href = REDIRECT_URI; } else document.getElementById('loginOverlay')?.classList.remove('hidden'); }
+
+            if (urlParams.get('code')) {
+                // Handling redirect back from Dropbox
+                try {
+                    const verifier = localStorage.getItem('dbx_verifier');
+                    dbxAuth.setCodeVerifier(verifier);
+                    const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
+                    localStorage.setItem('dbx_token', resp.result.access_token);
+                    // Clear the code from the URL and reload
+                    window.location.href = REDIRECT_URI;
+                } catch (e) {
+                    console.error("Auth Error:", e);
+                    document.getElementById('loginOverlay').classList.remove('hidden');
+                }
+            } else if (token) {
+                startApp(token);
+                window.addEventListener('focus', checkForChanges);
+                setInterval(checkForChanges, 30000);
+            } else {
+                document.getElementById('loginOverlay').classList.remove('hidden');
+            }
         }
 
         async function doLogin() {
@@ -124,14 +145,17 @@
             window.location.href = REDIRECT_URI;
         }
 
-        function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
+        function startApp(token) { 
+            dbx = new Dropbox.Dropbox({ accessToken: token }); 
+            loadTasks(); 
+        }
 
         async function loadTasks() {
             if (isSyncing) return;
             isSyncing = true;
             const btn = document.getElementById('syncBtn');
             const indicator = document.getElementById('syncIndicator');
-            if(btn) { btn.innerText = "LOCKED"; btn.disabled = true; btn.classList.add('syncing-anim'); }
+            if(btn) { btn.innerText = "SYNCING"; btn.disabled = true; btn.classList.add('syncing-anim'); }
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 lastServerTag = res.result.rev;
@@ -167,7 +191,12 @@
             const pr = text.match(REGEX_PROJECT);
             const isHeader = text.startsWith('#') || text.startsWith('--');
             let isPastDue = false;
-            if (d) { const due = new Date(d[1], d[2]-1, d[3]); const today = new Date(); today.setHours(0,0,0,0); if (due < today && !text.startsWith('x ')) isPastDue = true; }
+            if (d) { 
+                const due = new Date(d[1], d[2]-1, d[3]); 
+                const today = new Date(); 
+                today.setHours(0,0,0,0); 
+                if (due < today && !text.startsWith('x ')) isPastDue = true; 
+            }
             return { priority: p ? p[1] : 'Z', due: d ? d[0] : '9999-12-31', project: pr ? pr[0] : 'ZZZ', isHeader, isPastDue };
         }
 
@@ -178,21 +207,34 @@
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
             
-            activeFilters.forEach(f => { if (f === 'PAST_DUE') { display = display.filter(t => t.meta.isPastDue || t.meta.isHeader); } else { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); } });
+            activeFilters.forEach(f => { 
+                if (f === 'PAST_DUE') { 
+                    display = display.filter(t => t.meta.isPastDue || t.meta.isHeader); 
+                } else { 
+                    display = display.filter(t => t.text.includes(f) || t.meta.isHeader); 
+                } 
+            });
+            
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
             list.innerHTML = display.map(item => {
                 if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
+                
                 const isDone = item.text.startsWith('x ');
                 if (editingIndex === item.originalIndex) return `<div class="p-2 bg-[#1e1e1e] rounded"><input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-black border border-blue-500 rounded px-2 py-1 text-sm outline-none text-white" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)"></div>`;
 
+                let workingText = item.text;
                 let links = [];
-                let workingText = item.text.replace(REGEX_LINK, (match, url) => {
-                    const placeholder = `__LNK_${links.length}__`;
-                    links.push(`<a href="${url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`);
-                    return placeholder;
+                
+                // 1. Protection for Links
+                workingText = workingText.replace(REGEX_LINK, (match, url) => {
+                    const cleanUrl = url.startsWith('www.') ? 'https://' + url : url;
+                    const id = links.length;
+                    links.push(`<a href="${cleanUrl}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`);
+                    return `%%LNK${id}%%`;
                 });
 
+                // 2. Formatting
                 workingText = workingText
                     .replace(REGEX_PRIO_START, (match, p) => `<span class="text-orange-400 font-bold">(${p})</span>`)
                     .replace(REGEX_PROJECT, (match) => `<span class="text-blue-400 font-bold">${match}</span>`)
@@ -200,12 +242,16 @@
                     .replace(REGEX_DUE, (match) => `<span class="${item.meta.isPastDue ? 'text-red-500 underline decoration-dotted font-bold' : 'text-yellow-500'}">${match}</span>`)
                     .replace(/(\d{4}[-.]\d{2}[-.]\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>');
 
-                links.forEach((l, i) => workingText = workingText.replace(`__LNK_${i}__`, l));
+                // 3. Restoration of Links
+                links.forEach((html, i) => {
+                    workingText = workingText.replace(`%%LNK${i}%%`, html);
+                });
+
                 const pClass = isDone ? 'border-l-gray-700 opacity-40' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : item.meta.priority === 'C' ? 'prio-c' : 'prio-none');
                 return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} ${(!isDone && item.meta.isPastDue) ? 'overdue-alert' : ''} mb-1 p-3 hover:bg-[#252525] rounded-r shadow-sm">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     <div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 italic' : ''}" onclick="startEditing(${item.originalIndex})">${workingText}</div>
-                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
+                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             updateSidebars(display);
@@ -276,7 +322,7 @@
 
         async function checkForChanges() { if (isRawEditing || isSyncing || editingIndex !== null) return; try { const meta = await dbx.filesGetMetadata({ path: '/todo.txt' }); if (meta.result.rev !== lastServerTag) loadTasks(); } catch (e) {} }
         function toggleTask(i) { const today = new Date().toISOString().split('T')[0]; const doneRegex = /^x \d{4}-\d{2}-\d{2} /; allTasks[i] = doneRegex.test(allTasks[i]) ? allTasks[i].replace(doneRegex, '') : `x ${today} ${allTasks[i]}`; render(); saveTasks(); }
-        function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
+        function deleteTask(i) { if(confirm('Delete this task?')) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
         function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
@@ -288,6 +334,7 @@
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function downloadBackup() { const blob = new Blob([allTasks.join('\n')], {type: 'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `todo-backup.txt`; a.click(); }
         function updateSyncTime() { const now = new Date(); document.getElementById('lastSync').innerText = `Synced ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`; }
+        
         init();
     </script>
 </body>
