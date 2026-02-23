@@ -11,7 +11,7 @@
 
     <div class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v1.4.1-stable</div>
+        <div id="statusText" class="text-gray-500">v1.5.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -24,22 +24,29 @@
     <header class="p-4 bg-[#1e1e1e] border-b border-[#333]">
         <div class="max-w-5xl mx-auto flex items-center gap-6">
             <div class="font-bold text-xl text-blue-500 tracking-tight">DropDotTxt</div>
-            <div class="flex-1 flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task... (A) Task +Project @Context due:2026-02-28" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+            <div class="flex-1 flex gap-2 items-center">
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button id="addBtn" onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-colors">Add</button>
+                
+                <div id="filterTag" class="hidden flex items-center bg-blue-900/40 text-blue-400 border border-blue-500/50 px-3 py-1 rounded text-xs font-bold gap-2">
+                    <span id="activeFilterName"></span>
+                    <button onclick="clearFilter()" class="hover:text-white transition-colors">✕</button>
+                </div>
             </div>
-            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400">Logout</button>
+            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
         <aside class="w-64 p-6 hidden md:block overflow-y-auto border-r border-[#333] bg-[#121212]">
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Schedule</h2>
-            <div id="dueList" class="space-y-1 mb-8 text-sm font-medium text-yellow-500"></div>
+            <div id="dueList" class="space-y-1 mb-8 text-sm font-medium"></div>
+            
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
-            <div id="projectList" class="space-y-1 mb-8 text-sm font-medium text-blue-400"></div>
+            <div id="projectList" class="space-y-1 mb-8 text-sm font-medium"></div>
+            
             <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
-            <div id="contextList" class="space-y-1 text-sm font-medium text-green-400"></div>
+            <div id="contextList" class="space-y-1 text-sm font-medium"></div>
         </aside>
 
         <main class="flex-1 p-6 overflow-y-auto bg-[#121212]">
@@ -53,6 +60,7 @@
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx;
         let allTasks = [];
+        let currentFilter = null;
 
         function setStatus(msg, type = 'idle') {
             const indicator = document.getElementById('syncIndicator');
@@ -106,7 +114,7 @@
                 const response = await dbx.filesDownload({ path: '/todo.txt' });
                 const text = await response.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
-                setStatus('v1.4.1-stable');
+                setStatus('v1.5.0-stable');
                 render();
             } catch (e) {
                 allTasks = ["(A) App Connected! Add a task to begin."];
@@ -118,13 +126,9 @@
             setStatus('Syncing...', 'syncing');
             try {
                 const content = allTasks.join('\n');
-                await dbx.filesUpload({ 
-                    path: '/todo.txt', 
-                    contents: content, 
-                    mode: { ".tag": "overwrite" }
-                });
+                await dbx.filesUpload({ path: '/todo.txt', contents: content, mode: { ".tag": "overwrite" } });
                 setStatus('Synced');
-                setTimeout(() => setStatus('v1.4.1-stable'), 2000);
+                setTimeout(() => setStatus('v1.5.0-stable'), 2000);
             } catch (error) { setStatus('Sync Error', 'error'); }
         }
 
@@ -138,14 +142,20 @@
             saveTasks();
         }
 
+        function setFilter(filter) {
+            currentFilter = filter;
+            render();
+        }
+
+        function clearFilter() {
+            currentFilter = null;
+            render();
+        }
+
         function toggleTask(idx) {
             let task = allTasks[idx];
             const today = new Date().toISOString().split('T')[0];
-            if (task.startsWith('x ')) {
-                allTasks[idx] = task.replace(/^x \d{4}-\d{2}-\d{2} /, '');
-            } else {
-                allTasks[idx] = `x ${today} ${task}`;
-            }
+            allTasks[idx] = task.startsWith('x ') ? task.replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${today} ${task}`;
             render();
             saveTasks();
         }
@@ -154,7 +164,7 @@
             if (allTasks[idx] === newText.trim()) return;
             allTasks[idx] = newText.trim();
             saveTasks();
-            render(); 
+            render();
         }
 
         function deleteTask(idx) {
@@ -165,42 +175,61 @@
 
         function render() {
             const list = document.getElementById('todoList');
-            if (!list) return;
+            const filterTag = document.getElementById('filterTag');
+            const activeFilterName = document.getElementById('activeFilterName');
 
-            // Simplified render: No sorting within the UI to prevent index-mismatching crashes
-            list.innerHTML = allTasks.map((t, i) => {
-                const isDone = t.startsWith('x ');
+            if (currentFilter) {
+                filterTag.classList.remove('hidden');
+                activeFilterName.innerText = currentFilter;
+            } else {
+                filterTag.classList.add('hidden');
+            }
+
+            let displayTasks = allTasks.map((text, originalIndex) => ({ text, originalIndex }));
+            
+            if (currentFilter) {
+                displayTasks = displayTasks.filter(item => item.text.includes(currentFilter));
+            }
+
+            list.innerHTML = displayTasks.map((item) => {
+                const isDone = item.text.startsWith('x ');
                 let color = "border-l-blue-600";
                 let textColor = "text-gray-200";
                 
                 if(isDone) {
                     color = "border-l-gray-700 opacity-50";
                     textColor = "text-gray-500 line-through";
-                } else if(t.startsWith("(A)")) {
+                } else if(item.text.startsWith("(A)")) {
                     color = "border-l-red-500";
                     textColor = "text-red-400 font-bold";
                 }
 
                 return `
                 <div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 hover:bg-[#252525] transition-all">
-                    <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${i})" class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
                     <input type="text" 
-                           value="${t.replace(/"/g, '&quot;')}" 
-                           onblur="updateTaskText(${i}, this.value)"
-                           onkeypress="if(event.key === 'Enter') { this.blur(); }"
+                           value="${item.text.replace(/"/g, '&quot;')}" 
+                           onblur="updateTaskText(${item.originalIndex}, this.value)"
+                           onkeypress="if(event.key === 'Enter') this.blur()"
                            class="flex-1 bg-transparent outline-none border-none ${textColor} text-sm focus:bg-[#121212] px-1 rounded">
-                    <button onclick="deleteTask(${i})" class="text-gray-600 hover:text-red-500 px-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                    <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 px-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             
-            // Sidebar Update
             const fullText = allTasks.join(' ');
+            const renderSidebarItem = (val, colorClass) => 
+                `<div onclick="setFilter('${val}')" class="cursor-pointer ${colorClass} hover:text-white transition-colors truncate">
+                    ${val.startsWith('due:') ? val.replace('due:', '') : val}
+                </div>`;
+
             const dueDates = [...new Set(fullText.match(/due:\d{4}-\d{2}-\d{2}/g))].sort();
-            document.getElementById('dueList').innerHTML = (dueDates || []).map(d => `<div>${d.replace('due:', '')}</div>`).join('');
+            document.getElementById('dueList').innerHTML = (dueDates || []).map(d => renderSidebarItem(d, 'text-yellow-500')).join('');
+
             const projects = [...new Set(fullText.match(/\+\w+/g))].sort();
-            document.getElementById('projectList').innerHTML = (projects || []).map(p => `<div>${p}</div>`).join('');
+            document.getElementById('projectList').innerHTML = (projects || []).map(p => renderSidebarItem(p, 'text-blue-400')).join('');
+
             const contexts = [...new Set(fullText.match(/@\w+/g))].sort();
-            document.getElementById('contextList').innerHTML = (contexts || []).map(c => `<div>${c}</div>`).join('');
+            document.getElementById('contextList').innerHTML = (contexts || []).map(c => renderSidebarItem(c, 'text-green-400')).join('');
         }
 
         init();
