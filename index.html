@@ -17,16 +17,20 @@
         .prio-none { border-left-color: #3b82f6 !important; }
         #sidebar { transition: transform 0.3s ease-in-out; }
         @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
+        
+        /* Smooth Action Buttons */
+        .task-row .task-actions { opacity: 0; transition: opacity 0.15s ease-in-out; }
         .task-row:hover .task-actions { opacity: 1; }
+        @media (max-width: 768px) { .task-actions { opacity: 0.6 !important; } }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[9px] font-mono z-50 flex items-center gap-3 bg-[#0a0a0a]/90 px-3 py-1.5 rounded-full border border-[#333]">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText" class="flex gap-3 items-center">
-            <span class="text-gray-400">v3.4.4</span>
-            <span class="text-gray-600 border-l border-gray-800 pl-3">Feb 23, 08:52 AM</span>
+        <div id="statusText" class="flex gap-3 items-center text-gray-400">
+            <span>v3.4.5</span>
+            <span class="border-l border-gray-800 pl-3">Feb 23, 08:58 AM</span>
         </div>
     </div>
 
@@ -37,18 +41,18 @@
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400">☰</button>
                     <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetAll()">to-do-txt</div>
                 </div>
-                <div class="flex gap-3 text-[10px] font-bold uppercase text-gray-500">
-                    <button onclick="toggleViewMode()" class="hover:text-blue-400">View</button>
-                    <button onclick="toggleRawEdit()" class="hover:text-orange-400">Raw</button>
-                    <button onclick="doLogout()" class="hover:text-red-400">Logout</button>
+                <div class="flex gap-4 text-[10px] font-bold uppercase text-gray-500">
+                    <button onclick="toggleViewMode()" class="hover:text-blue-400 transition">Board View</button>
+                    <button onclick="toggleRawEdit()" class="hover:text-orange-400 transition">Raw Edit</button>
+                    <button onclick="doLogout()" class="hover:text-red-400 transition">Logout</button>
                 </div>
             </div>
             
-            <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
+            <input type="text" id="searchInput" oninput="render()" placeholder="Quick filter..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white transition-all">
             
             <div class="flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add a task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
-                <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500">Add</button>
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="What needs doing?" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 placeholder-gray-600">
+                <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500 transition-colors">Add</button>
             </div>
         </div>
     </header>
@@ -64,17 +68,17 @@
         <main class="flex-1 overflow-y-auto p-4 md:p-8">
             <div id="todoList" class="max-w-4xl mx-auto space-y-1"></div>
             <div id="kanbanBoard" class="hidden flex gap-4 h-full items-start overflow-x-auto pb-10"></div>
+            
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 py-3 rounded text-xs font-bold uppercase">Update File</button>
+                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none resize-none"></textarea>
+                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 py-3 rounded text-xs font-bold uppercase tracking-widest">Apply Changes</button>
             </div>
         </main>
     </div>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        const APP_VERSION = "v3.4.4";
-        const BUILD_TIME = "Feb 23, 08:52 AM";
+        const APP_VERSION = "v3.4.5";
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, viewMode = 'list', currentRev = null;
@@ -90,7 +94,7 @@
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
                     localStorage.setItem('dbx_token', resp.result.access_token);
                     window.location.href = REDIRECT_URI;
-                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center"><button onclick="doLogin()" class="bg-blue-600 px-8 py-3 rounded font-bold">Connect Dropbox</button></div>`;
+                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold hover:bg-blue-500 transition">Connect Dropbox</button></div>`;
             }
         }
 
@@ -128,10 +132,9 @@
 
         function updateSyncStatus(status) {
             const ind = document.getElementById('syncIndicator'), txt = document.getElementById('statusText');
-            const info = `<span class="text-gray-400">${APP_VERSION}</span><span class="text-gray-600 border-l border-gray-800 pl-3">${BUILD_TIME}</span>`;
-            if (status === 'synced') { ind.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerHTML = info; }
-            else if (status === 'outdated') { ind.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerHTML = `<span class="text-yellow-400 cursor-pointer underline" onclick="loadTasks()">Refresh Required</span>`; }
-            else { ind.className = "w-2 h-2 rounded-full bg-blue-500 animate-bounce"; txt.innerText = "Syncing..."; }
+            if (status === 'synced') ind.className = "w-2 h-2 rounded-full bg-green-500";
+            else if (status === 'outdated') ind.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse";
+            else ind.className = "w-2 h-2 rounded-full bg-blue-500 animate-bounce";
         }
 
         function getTaskMeta(text) {
@@ -154,27 +157,27 @@
             list.innerHTML = display.map(item => {
                 const pClass = item.meta.isDone ? 'opacity-40' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : 'prio-none');
                 const content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>').replace(/(@\w+)/g, '<span class="text-green-400">$1</span>');
-                return `<div class="task-row group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#252525]">
+                return `<div class="task-row group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#252525] transition-colors">
                     <input type="checkbox" ${item.meta.isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-3 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-sm ${item.meta.isDone ? 'line-through text-gray-500 italic' : ''}" ondblclick="editTaskText(${item.originalIndex})">${content}</div>
-                    <div class="task-actions opacity-0 flex gap-2 ml-2 transition-opacity">
-                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-500 hover:text-red-500 text-xs">✕</button>
+                    <div class="task-actions flex items-center gap-2 pl-4">
+                        <button onclick="deleteTask(${item.originalIndex})" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all" title="Delete Task">✕</button>
                     </div>
                 </div>`;
             }).join('');
         }
 
         function renderBoard() {
-            const board = document.getElementById('kanbanBoard'), search = (document.getElementById('searchInput')?.value || "").toLowerCase();
+            const board = document.getElementById('kanbanBoard');
             const tags = [...new Set(allTasks.map(t => getTaskMeta(t).project).filter(x => x !== null))].sort();
             tags.push(null);
             board.innerHTML = tags.map(tag => {
                 const tasks = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }))
-                    .filter(t => t.meta.project === tag && (search ? t.text.toLowerCase().includes(search) : true));
+                    .filter(t => t.meta.project === tag);
                 if (tasks.length === 0 && tag !== null) return "";
                 return `<div class="bg-[#1a1a1a] p-3 rounded-lg border border-[#333] min-w-[280px]">
-                    <div class="text-[10px] font-black text-blue-500 uppercase mb-4">${tag || 'Inbox'}</div>
-                    ${tasks.map(t => `<div class="bg-[#222] p-2 rounded mb-2 text-xs">${t.text}</div>`).join('')}
+                    <div class="text-[10px] font-black text-blue-500 uppercase mb-4 tracking-widest">${tag || 'Inbox'}</div>
+                    ${tasks.map(t => `<div class="bg-[#222] p-2 rounded mb-2 text-xs border-l-2 border-blue-500/30">${t.text}</div>`).join('')}
                 </div>`;
             }).join('');
         }
@@ -186,7 +189,7 @@
         }
 
         function deleteTask(i) {
-            if (confirm("Permanently delete this task?")) {
+            if (confirm("Delete this task?")) {
                 allTasks.splice(i, 1);
                 render(); saveTasks();
             }
@@ -209,12 +212,12 @@
 
         function updateSidebars() {
             const openT = allTasks.filter(t => !t.startsWith('x '));
-            document.getElementById('dashboardMetrics').innerHTML = `<div class="text-blue-400 font-bold">Tasks: ${openT.length}</div>`;
+            document.getElementById('dashboardMetrics').innerHTML = `<div class="text-blue-400 font-bold mb-2">Open: ${openT.length}</div>`;
             const sb = (id, re, c) => {
                 const items = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = items.map(v => {
                     const count = openT.filter(t => t.includes(v)).length;
-                    return count > 0 ? `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer text-xs p-1 ${activeFilters.has(v) ? 'bg-blue-900/30 text-white font-bold' : c}">${v} <span>${count}</span></div>` : "";
+                    return count > 0 || activeFilters.has(v) ? `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer text-[11px] p-1.5 rounded mb-1 transition ${activeFilters.has(v) ? 'bg-blue-600 text-white font-bold' : c + ' hover:bg-gray-800'}">${v} <span class="opacity-50">${count}</span></div>` : "";
                 }).join('');
             };
             sb('priorityList', /\([A-Z]\)/g, 'text-orange-400'); sb('projectList', /\+\w+/g, 'text-blue-400'); sb('contextList', /@\w+/g, 'text-green-400');
