@@ -28,7 +28,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.3.0</div>
+        <div id="statusText">v3.3.1</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -48,6 +48,7 @@
                 </div>
                 <div class="flex items-center gap-4 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-white/70">
                     <button onclick="downloadBackup()" class="text-blue-400 hover:text-blue-300">Backup</button>
+                    <button onclick="toggleHeaders()" id="headerToggle" class="text-green-400">Hide Headers</button>
                     <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-400">Raw</button>
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
@@ -104,7 +105,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, editingIndex = null, showPastDueOnly = false, activeProject = null;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null, showPastDueOnly = false, activeProject = null;
 
         function setupPWA() {
             const manifest = {
@@ -201,6 +202,12 @@
             render();
         }
 
+        function toggleHeaders() {
+            showHeaders = !showHeaders;
+            document.getElementById('headerToggle').innerText = showHeaders ? "Hide Headers" : "Show Headers";
+            render();
+        }
+
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             const banner = document.getElementById('focusBanner');
@@ -218,6 +225,8 @@
                 focusProgress.style.width = total > 0 ? `${(completed / total) * 100}%` : '0%';
             } else { banner.classList.add('hidden'); }
 
+            // Filtering Logic
+            if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
             if (!showCompleted || showPastDueOnly) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (showPastDueOnly) display = display.filter(t => t.meta.isPastDue || t.meta.isHeader);
             if (activeProject) display = display.filter(t => t.text.includes(activeProject) || t.meta.isHeader);
@@ -289,7 +298,7 @@
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function resetAll() { activeFilters.clear(); activeProject = null; showPastDueOnly = false; showCompleted = true; document.getElementById('doneToggle').innerText = "Hide Done"; document.getElementById('searchInput').value = ""; render(); }
+        function resetAll() { activeFilters.clear(); activeProject = null; showPastDueOnly = false; showCompleted = true; showHeaders = true; document.getElementById('doneToggle').innerText = "Hide Done"; document.getElementById('headerToggle').innerText = "Hide Headers"; document.getElementById('searchInput').value = ""; render(); }
         
         init();
     </script>
