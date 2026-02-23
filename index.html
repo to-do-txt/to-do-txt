@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.5.3</title>
+    <title>to-do-txt v3.5.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -29,7 +29,6 @@
 
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s, color 0.1s; }
         
-        /* Header hierarchy styles */
         .h1-style { font-size: 1.5rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; padding-top: 2rem; margin-bottom: 1rem; }
         .h2-style { font-size: 1.125rem; font-weight: 800; color: #60a5fa; padding-top: 1.5rem; margin-bottom: 0.75rem; border-bottom: 1px solid #333; }
         .h3-style { font-size: 0.65rem; font-weight: 900; color: #93c5fd; letter-spacing: 0.1em; text-transform: uppercase; padding-top: 1rem; margin-bottom: 0.5rem; opacity: 0.8; }
@@ -57,7 +56,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText">v3.5.3</div>
+        <div id="statusText">v3.5.4</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
@@ -86,8 +85,11 @@
                     <button onclick="doLogout()" class="text-gray-500">Logout</button>
                 </div>
             </div>
-            <div class="flex w-full">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
+            <div class="flex items-center gap-2 w-full">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="flex-1 input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
+                <div id="taskCountBadge" class="bg-blue-600/20 text-blue-500 px-3 py-1 rounded-full text-[10px] font-black tracking-widest border border-blue-500/30 whitespace-nowrap">
+                    0 OPEN
+                </div>
             </div>
             <div id="addBar" class="relative flex gap-2">
                 <div class="flex-1 relative">
@@ -181,15 +183,17 @@
                 });
             }
 
+            // Update Total Open Badge
+            const openCount = display.filter(t => !t.text.startsWith('x ') && !t.meta.isHeader).length;
+            document.getElementById('taskCountBadge').innerText = `${openCount} OPEN`;
+
             list.innerHTML = display.map(item => {
-                // Header Hierarchy Logic
                 if (item.meta.isHeader) {
                     let hClass = 'h3-style';
                     let cleanText = item.text.trim();
                     if (cleanText.startsWith('###')) hClass = 'h3-style';
                     else if (cleanText.startsWith('##')) hClass = 'h2-style';
                     else if (cleanText.startsWith('#')) hClass = 'h1-style';
-                    
                     return `<div class="${hClass}">${cleanText.replace(/^[#\s]*/, '')}</div>`;
                 }
 
@@ -263,7 +267,6 @@
 
         function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); }
 
-        // Standard Dropbox and UI functions below
         async function loadTasks() {
             if (isSyncing) return; isSyncing = true;
             document.getElementById('syncBtn')?.classList.add('syncing-anim');
