@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.5.1</title>
+    <title>to-do-txt v3.5.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root {
-            /* Default Dark Mode (Original v3.3.2 Colors) */
+            /* Signature Dark Mode Colors */
             --bg-app: #121212;
             --bg-card: #1e1e1e;
             --bg-input: #0a0a0a;
@@ -28,7 +28,7 @@
             --sidebar-border: #d4d4d8;
         }
 
-        body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.2s, color 0.2s; }
+        body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s, color 0.1s; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg-app); }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
@@ -41,8 +41,15 @@
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         
+        #sidebar { z-index: 30; transition: transform 0.3s ease-in-out; background-color: var(--bg-app); border-color: var(--sidebar-border); }
+        header { z-index: 50; position: relative; } /* Ensure header is above sidebar */
+        
+        #suggestions { 
+            z-index: 100 !important; 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
         .overdue-alert { border-right: 2px solid #ef4444 !important; }
-        #sidebar { transition: transform 0.3s ease-in-out; background-color: var(--bg-app); border-color: var(--sidebar-border); }
         @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
         
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
@@ -53,11 +60,11 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText">v3.5.1</div>
+        <div id="statusText">v3.5.2</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
-    <header class="p-4 card-bg border-b z-40">
+    <header class="p-4 card-bg border-b shadow-lg">
         <div class="max-w-5xl mx-auto flex flex-col gap-3">
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
@@ -68,8 +75,8 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-3 text-[9px] font-bold uppercase tracking-widest">
-                    <button onclick="toggleTheme()" id="themeToggle" class="text-yellow-500">☀️ Mode</button>
-                    <select id="sortSelect" onchange="setSort(this.value)" class="bg-transparent border border-gray-700 text-muted px-2 py-1 rounded outline-none cursor-pointer">
+                    <button onclick="toggleTheme()" id="themeToggle" class="text-yellow-500 hover:opacity-80 transition-opacity">☀️ Light</button>
+                    <select id="sortSelect" onchange="setSort(this.value)" class="bg-transparent border border-gray-700 text-muted px-2 py-1 rounded outline-none cursor-pointer hover:border-gray-500">
                         <option value="file">File Order</option>
                         <option value="priority">Priority</option>
                         <option value="due">Due Date</option>
@@ -86,15 +93,17 @@
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
             </div>
             <div id="addBar" class="relative flex gap-2">
-                <input type="text" id="newTodo" onkeydown="handleInputKeydown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="w-full input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
-                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
-                <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b shadow-2xl z-50 max-h-48 overflow-y-auto mt-1 border-t-0"></div>
+                <div class="flex-1 relative">
+                    <input type="text" id="newTodo" onkeydown="handleInputKeydown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="w-full input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b z-[100] max-h-60 overflow-y-auto mt-1"></div>
+                </div>
+                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500 transition-colors">Add</button>
             </div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden relative">
-        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 p-6 z-50 border-r md:relative md:translate-x-0 md:block overflow-y-auto">
+        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 p-6 border-r md:relative md:translate-x-0 md:block overflow-y-auto shadow-2xl md:shadow-none">
             <div id="pastDueContainer" class="mb-8 hidden">
                 <h2 class="text-[10px] font-black text-red-500 mb-4 uppercase tracking-widest">Past Due</h2>
                 <div id="pastDueList" class="space-y-1 text-sm"></div>
@@ -104,12 +113,14 @@
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-blue-500/50">Projects</h2><div id="projectList" class="space-y-1 text-sm"></div></div>
             <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-green-500/50">Contexts</h2><div id="contextList" class="space-y-1 text-sm"></div></div>
         </aside>
-        <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/50 z-40 md:hidden"></div>
-        <main class="flex-1 p-4 md:p-6 overflow-y-auto w-full">
+        
+        <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/70 z-20 md:hidden"></div>
+        
+        <main class="flex-1 p-4 md:p-6 overflow-y-auto w-full relative z-10">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
             <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
                 <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-4 border rounded outline-none leading-relaxed resize-none"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest">Save Changes</button>
+                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest hover:bg-orange-500">Save Changes</button>
             </div>
         </main>
     </div>
@@ -124,29 +135,18 @@
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null, lastServerTag = null, suggestionIndex = -1, isSyncing = false, currentSort = 'file';
 
         async function init() {
-            // Theme setup: Default to dark if no preference exists
             const savedTheme = localStorage.getItem('theme') || 'dark';
             if(savedTheme === 'light') document.body.classList.add('light-mode');
             updateThemeButton();
 
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
             const token = localStorage.getItem('dbx_token');
-
-            if (code) {
-                try {
-                    const verifier = localStorage.getItem('dbx_verifier');
-                    dbxAuth.setCodeVerifier(verifier);
-                    const response = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, code);
-                    localStorage.setItem('dbx_token', response.result.access_token);
-                    localStorage.removeItem('dbx_verifier');
-                    window.location.href = REDIRECT_URI; 
-                } catch (e) { console.error(e); }
-            } else if (token) {
+            if (token) {
                 dbx = new Dropbox.Dropbox({ accessToken: token });
                 loadTasks();
                 window.addEventListener('focus', checkForChanges);
-                setInterval(checkForChanges, 30000);
+            } else {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('code')) handleAuthCode(urlParams.get('code'));
             }
         }
 
@@ -160,15 +160,63 @@
             const btn = document.getElementById('themeToggle');
             const isLight = document.body.classList.contains('light-mode');
             btn.innerText = isLight ? "🌙 Dark" : "☀️ Light";
-            btn.className = isLight ? "text-indigo-600" : "text-yellow-500";
+            btn.style.color = isLight ? "#4f46e5" : "#eab308";
         }
 
-        // --- Logic from previous versions remains fully intact below ---
+        // Suggestions & UI Core
+        function showSuggestions(query) {
+            const isCtx = query.startsWith('@');
+            const typeReg = isCtx ? REGEX_CONTEXT : REGEX_PROJECT;
+            const matchesMap = {};
+            allTasks.forEach(t => { (t.match(typeReg) || []).forEach(tag => matchesMap[tag] = (matchesMap[tag] || 0) + 1); });
+            const sorted = Object.keys(matchesMap).filter(t => t.toLowerCase().startsWith(query.toLowerCase())).sort((a,b) => matchesMap[b] - matchesMap[a]);
+            
+            const container = document.getElementById('suggestions');
+            if (sorted.length > 0) {
+                suggestionIndex = 0;
+                container.innerHTML = sorted.map((m, i) => `
+                    <div class="p-3 cursor-pointer text-sm border-b border-gray-800/50 flex justify-between items-center transition-colors ${i===0 ? 'bg-blue-600 text-white' : 'hover:bg-gray-800'}" onclick="applySuggestion('${m}')">
+                        <span class="font-bold">${m}</span>
+                        <span class="text-[10px] opacity-60">${matchesMap[m]} tasks</span>
+                    </div>`).join('');
+                container.classList.remove('hidden');
+            } else hideSuggestions();
+        }
+
+        function applySuggestion(tag) {
+            const inp = document.getElementById('newTodo');
+            const words = inp.value.slice(0, inp.selectionStart).split(/\s+/);
+            words[words.length-1] = tag;
+            inp.value = words.join(' ') + " " + inp.value.slice(inp.selectionStart);
+            hideSuggestions();
+            inp.focus();
+        }
+
+        function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); }
+
+        function handleInput(e) {
+            const val = e.target.value;
+            const cursor = e.target.selectionStart;
+            const word = val.slice(0, cursor).split(/\s+/).pop();
+            if (word.startsWith('@') || word.startsWith('+')) showSuggestions(word);
+            else hideSuggestions();
+        }
+
+        function handleInputKeydown(e) {
+            const container = document.getElementById('suggestions');
+            if (container.classList.contains('hidden')) { if (e.key === 'Enter') addTask(); return; }
+            if (e.key === 'Enter' || e.key === 'Tab') { 
+                e.preventDefault(); 
+                const active = container.children[suggestionIndex];
+                if(active) applySuggestion(active.querySelector('span').innerText);
+            } else if (e.key === 'Escape') hideSuggestions();
+        }
+
+        // Task & Sync Logic
         async function loadTasks() {
             if (isSyncing) return;
             isSyncing = true;
-            const btn = document.getElementById('syncBtn');
-            if(btn) btn.classList.add('syncing-anim');
+            document.getElementById('syncBtn')?.classList.add('syncing-anim');
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 lastServerTag = res.result.rev;
@@ -176,33 +224,22 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
                 updateSyncTime();
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("Sync Error:", e); }
             finally { 
-                isSyncing = false; 
-                if(btn) btn.classList.remove('syncing-anim');
+                isSyncing = false;
+                document.getElementById('syncBtn')?.classList.remove('syncing-anim');
             }
         }
 
         async function saveTasks() {
             if (isSyncing) return;
             isSyncing = true;
-            try { 
-                const res = await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); 
+            try {
+                const res = await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
                 lastServerTag = res.result.rev;
                 updateSyncTime();
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("Save Error:", e); }
             finally { isSyncing = false; }
-        }
-
-        function getTaskMeta(text) {
-            const p = text.match(REGEX_PRIO_START), d = text.match(/due:(\d{4})[-.](\d{2})[-.](\d{2})/), pr = text.match(REGEX_PROJECT), ctx = text.match(REGEX_CONTEXT);
-            const isHeader = text.startsWith('#') || text.startsWith('--');
-            let isPastDue = false;
-            if (d) { 
-                const due = new Date(d[1], d[2]-1, d[3]), today = new Date(); today.setHours(0,0,0,0);
-                if (due < today && !text.startsWith('x ')) isPastDue = true;
-            }
-            return { priority: p ? p[1] : 'Z', due: d ? d[0].replace('due:', '') : '9999-12-31', project: pr ? pr[0] : 'ZZZ', context: ctx ? ctx[0] : 'ZZZ', isHeader, isPastDue };
         }
 
         function render() {
@@ -225,9 +262,9 @@
             }
 
             list.innerHTML = display.map(item => {
-                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-gray-700 mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
+                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-gray-700/50 mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
                 const isDone = item.text.startsWith('x ');
-                if (editingIndex === item.originalIndex) return `<div class="p-2 card-bg rounded"><input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full input-bg border border-blue-500 rounded px-2 py-1 text-sm outline-none" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)"></div>`;
+                if (editingIndex === item.originalIndex) return `<div class="p-2 card-bg rounded border border-blue-500"><input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)"></div>`;
 
                 let workingText = item.text.replace(REGEX_LINK, (match, url) => `<a href="${url.startsWith('www.') ? 'https://'+url : url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`);
                 workingText = workingText
@@ -237,7 +274,7 @@
                     .replace(REGEX_DUE, (match) => `<span class="${item.meta.isPastDue ? 'text-red-500 underline decoration-dotted font-bold' : 'text-yellow-500'}">${match}</span>`);
 
                 const pClass = isDone ? 'border-l-gray-500 opacity-40' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : item.meta.priority === 'C' ? 'prio-c' : 'prio-none');
-                return `<div class="group flex items-center card-bg border-l-4 ${pClass} ${(!isDone && item.meta.isPastDue) ? 'overdue-alert' : ''} mb-1 p-3 hover:opacity-80 rounded-r shadow-sm">
+                return `<div class="group flex items-center card-bg border-l-4 ${pClass} ${(!isDone && item.meta.isPastDue) ? 'overdue-alert' : ''} mb-1 p-3 hover:brightness-110 rounded-r shadow-sm transition-all">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     <div class="flex-1 text-sm cursor-text ${isDone ? 'line-through opacity-50 italic' : ''}" onclick="startEditing(${item.originalIndex})">${workingText}</div>
                     <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2 transition-opacity">✕</button>
@@ -246,25 +283,33 @@
             updateSidebars(display);
         }
 
+        // Utils
+        function getTaskMeta(text) {
+            const p = text.match(REGEX_PRIO_START), d = text.match(/due:(\d{4})[-.](\d{2})[-.](\d{2})/), pr = text.match(REGEX_PROJECT), ctx = text.match(REGEX_CONTEXT);
+            const isHeader = text.startsWith('#') || text.startsWith('--');
+            let isPastDue = false;
+            if (d) { 
+                const due = new Date(d[1], d[2]-1, d[3]), today = new Date(); today.setHours(0,0,0,0);
+                if (due < today && !text.startsWith('x ')) isPastDue = true;
+            }
+            return { priority: p ? p[1] : 'Z', due: d ? d[0].replace('due:', '') : '9999-12-31', project: pr ? pr[0] : 'ZZZ', context: ctx ? ctx[0] : 'ZZZ', isHeader, isPastDue };
+        }
+
         function updateSidebars(currentVisibleTasks) {
             const pdCount = currentVisibleTasks.filter(t => !t.text.startsWith('x ') && t.meta.isPastDue).length;
             const pdCont = document.getElementById('pastDueContainer');
             if (pdCount > 0 || activeFilters.has('PAST_DUE')) {
                 pdCont.classList.remove('hidden');
-                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('PAST_DUE')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has('PAST_DUE') ? 'text-white font-bold' : 'text-red-400'}"><span>Overdue</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded">${pdCount}</span></div>`;
+                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('PAST_DUE')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has('PAST_DUE') ? 'text-white font-bold' : 'text-red-400'}"><span>Overdue</span><span class="text-[10px] bg-black/30 px-2 py-0.5 rounded">${pdCount}</span></div>`;
             } else pdCont.classList.add('hidden');
 
             const sb = (id, re, colorClass) => {
                 const map = {}; 
                 allTasks.forEach(t => { (t.match(re) || []).forEach(v => map[v] = 0); });
-                currentVisibleTasks.forEach(t => { 
-                    if(t.text.startsWith('x ') || t.meta.isHeader) return;
-                    (t.text.match(re) || []).forEach(v => map[v]++); 
-                });
+                currentVisibleTasks.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(re) || []).forEach(v => map[v]++); });
                 document.getElementById(id).innerHTML = Object.keys(map).sort().map(v => {
-                    const count = map[v];
-                    if (count === 0 && !activeFilters.has(v)) return "";
-                    return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has(v) ? 'text-white font-bold' : colorClass}"><span>${v.replace('due:','').replace(/[()]/g,'')}</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded ${count === 0 ? 'text-gray-600' : ''}">${count}</span></div>`;
+                    const count = map[v]; if (count === 0 && !activeFilters.has(v)) return "";
+                    return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has(v) ? 'text-white font-bold' : colorClass}"><span>${v.replace('due:','').replace(/[()]/g,'')}</span><span class="text-[10px] bg-black/30 px-2 py-0.5 rounded">${count}</span></div>`;
                 }).join('');
             };
             sb('priorityList', /\([A-Z]\)/g, 'text-orange-400');
@@ -273,50 +318,26 @@
             sb('contextList', REGEX_CONTEXT, 'text-green-400');
         }
 
-        function handleInput(e) {
-            const val = e.target.value; const cursor = e.target.selectionStart; const words = val.slice(0, cursor).split(/\s+/); const lastWord = words.pop();
-            if (lastWord.startsWith('@') || lastWord.startsWith('+')) showSuggestions(lastWord); else hideSuggestions();
-        }
-
-        function showSuggestions(query) {
-            const isCtx = query.startsWith('@'); const typeReg = isCtx ? REGEX_CONTEXT : REGEX_PROJECT; const matchesMap = {};
-            allTasks.forEach(t => { const found = t.match(typeReg); if (found) found.forEach(tag => matchesMap[tag] = (matchesMap[tag] || 0) + 1); });
-            const sorted = Object.keys(matchesMap).filter(t => t.toLowerCase().startsWith(query.toLowerCase()) && t !== query).sort((a, b) => matchesMap[b] - matchesMap[a]);
-            const container = document.getElementById('suggestions');
-            if (sorted.length > 0) {
-                suggestionIndex = 0; container.innerHTML = sorted.map((m, i) => `<div class="p-3 cursor-pointer text-sm border-b border-gray-800 flex justify-between ${i===0?'bg-blue-600 text-white':''}" onclick="applySuggestion('${m}')"><span>${m}</span><span>${matchesMap[m]}</span></div>`).join('');
-                container.classList.remove('hidden');
-            } else hideSuggestions();
-        }
-
-        function applySuggestion(tag) { const inp = document.getElementById('newTodo'); const words = inp.value.slice(0, inp.selectionStart).split(/\s+/); words[words.length-1] = tag; inp.value = words.join(' ') + " " + inp.value.slice(inp.selectionStart); hideSuggestions(); inp.focus(); }
-        function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); suggestionIndex = -1; }
-        
-        function handleInputKeydown(e) {
-            const container = document.getElementById('suggestions');
-            if (container.classList.contains('hidden')) { if (e.key === 'Enter') addTask(); return; }
-            if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applySuggestion(container.children[suggestionIndex].querySelector('span').innerText); }
-            else if (e.key === 'Escape') hideSuggestions();
-        }
-
         function addTask() {
             const inp = document.getElementById('newTodo'); let text = inp.value.trim(); if (!text) return;
-            const today = new Date().toISOString().split('T')[0]; const prioMatch = text.match(REGEX_PRIO_START);
-            if (prioMatch) text = `${prioMatch[0]} ${today} ${text.replace(REGEX_PRIO_START, '').trim()}`; else text = `${today} ${text}`;
+            const today = new Date().toISOString().split('T')[0];
+            text = text.match(REGEX_PRIO_START) ? `${text.match(REGEX_PRIO_START)[0]} ${today} ${text.replace(REGEX_PRIO_START, '').trim()}` : `${today} ${text}`;
             allTasks.push(text); inp.value = ""; render(); saveTasks();
         }
 
         async function checkForChanges() { if (isRawEditing || isSyncing || editingIndex !== null) return; try { const meta = await dbx.filesGetMetadata({ path: '/todo.txt' }); if (meta.result.rev !== lastServerTag) loadTasks(); } catch (e) {} }
-        function toggleTask(i) { const today = new Date().toISOString().split('T')[0]; const doneRegex = /^x \d{4}-\d{2}-\d{2} /; allTasks[i] = doneRegex.test(allTasks[i]) ? allTasks[i].replace(doneRegex, '') : `x ${today} ${allTasks[i]}`; render(); saveTasks(); }
+        function toggleTask(i) { const today = new Date().toISOString().split('T')[0]; allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${today} ${allTasks[i]}`; render(); saveTasks(); }
         function deleteTask(i) { if(confirm('Delete?')) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
         function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; document.getElementById('sortSelect').value = "file"; currentSort = 'file'; render(); }
         function startEditing(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`)?.focus(), 10); }
         function finishEditing(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
+        function toggleCompletedVisibility() { showCompleted = !showCompleted; document.getElementById('doneToggle').innerText = showCompleted ? "Done" : "Show Done"; render(); }
+        function toggleHeaderVisibility() { showHeaders = !showHeaders; document.getElementById('headerToggle').innerText = showHeaders ? "Headers" : "Show Headers"; render(); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function updateSyncTime() { const now = new Date(); document.getElementById('lastSync').innerText = `Synced ${now.toLocaleTimeString([], { hour12: false })}`; }
+        function updateSyncTime() { document.getElementById('lastSync').innerText = `Synced ${new Date().toLocaleTimeString([], { hour12: false })}`; }
         function doLogout() { localStorage.removeItem('dbx_token'); window.location.reload(); }
 
         init();
