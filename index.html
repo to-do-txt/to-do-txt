@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DropDotTxt</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>to-do-txt</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <meta name="theme-color" content="#1e1e1e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #121212; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-        .dropdown-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
         .prio-a { border-color: #fb923c !important; }
         .prio-b { border-color: #facc15 !important; }
         .prio-c { border-color: #4ade80 !important; }
@@ -27,13 +28,14 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v2.9.5-pwa</div>
+        <div id="statusText">v2.9.7-pwa-final</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 mx-4">
-            <h1 class="text-2xl font-bold mb-4 text-blue-500">DropDotTxt</h1>
-            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white">Connect Dropbox</button>
+            <h1 class="text-2xl font-bold mb-4 text-blue-500 font-black">to-do-txt</h1>
+            <p class="text-xs text-gray-500 mb-6">Simple tasks, synced via Dropbox</p>
+            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white shadow-lg">Connect Dropbox</button>
         </div>
     </div>
 
@@ -42,37 +44,27 @@
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
-                    <div class="font-bold text-lg md:text-xl text-blue-500 cursor-pointer" onclick="resetAll()">DropDotTxt</div>
+                    <div class="font-bold text-lg md:text-xl text-blue-500 cursor-pointer tracking-tighter" onclick="resetAll()">to-do-txt</div>
                 </div>
                 <div class="hidden lg:flex flex-1 mx-6">
                     <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-10 py-1.5 text-xs outline-none focus:border-blue-500">
                 </div>
-                <div class="flex items-center gap-3 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
-                    <button onclick="downloadBackup()" class="text-blue-400">Backup</button>
-                    <button onclick="document.getElementById('sortMenu').classList.toggle('hidden')" class="text-gray-400">Sort</button>
-                    <div id="sortMenu" class="hidden absolute top-full right-0 mt-2 w-40 bg-[#1e1e1e] border border-[#333] rounded-lg z-[100] dropdown-shadow p-2 normal-case">
-                        <button onclick="setSort('natural')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Natural</button>
-                        <button onclick="setSort('priority')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Priority</button>
-                        <button onclick="setSort('due')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Due Date</button>
-                    </div>
-                    <button onclick="toggleCompletedVisibility()" class="text-purple-400 hidden sm:block">Done</button>
-                    <button onclick="toggleRawEdit()" class="text-orange-400">Edit</button>
+                <div class="flex items-center gap-4 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
+                    <button onclick="downloadBackup()" class="text-blue-400 hover:text-blue-300">Backup</button>
+                    <button onclick="toggleCompletedVisibility()" class="text-purple-400">Archive</button>
+                    <button onclick="toggleRawEdit()" class="text-orange-400">Raw</button>
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
             </div>
             <div id="addBar" class="flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-3 py-2 text-sm outline-none focus:border-blue-500 text-white">
-                <button onclick="addTask()" class="bg-blue-600 px-4 md:px-6 py-2 rounded font-bold text-sm text-white transition-colors hover:bg-blue-500">Add</button>
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white">
+                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
             </div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden relative">
         <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-6 z-50 border-r border-[#333] md:relative md:translate-x-0 md:block overflow-y-auto">
-            <div class="flex justify-between items-center md:hidden mb-6">
-                <span class="text-blue-500 font-bold">Filters</span>
-                <button onclick="toggleSidebar()" class="text-gray-500 text-2xl">×</button>
-            </div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-sm"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-yellow-500/50">Due</h2><div id="dueList" class="space-y-1 text-sm"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-blue-500/50">Projects</h2><div id="projectList" class="space-y-1 text-sm"></div></div>
@@ -94,14 +86,15 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, currentSort = 'natural', editingIndex = null;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, editingIndex = null;
 
-        // --- PWA LOGIC ---
         function setupPWA() {
             const manifest = {
-                name: "DropDotTxt", short_name: "DropDot", start_url: ".", display: "standalone",
+                name: "to-do-txt", short_name: "to-do-txt", start_url: ".", display: "standalone",
                 background_color: "#121212", theme_color: "#1e1e1e",
-                icons: [{ src: "https://cdn-icons-png.flaticon.com/512/2098/2098402.png", sizes: "512x512", type: "image/png" }]
+                icons: [
+                    { src: "https://cdn-icons-png.flaticon.com/512/2098/2098402.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+                ]
             };
             const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
             const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
@@ -139,7 +132,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 Click text to edit"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 Click text to edit", "Check the link: www.google.com"]; render(); }
         }
 
         async function saveTasks() {
@@ -205,13 +198,13 @@
                         .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
                         .replace(/((https?:\/\/|www\.)[^\s]+)/g, (url) => {
                             const href = url.startsWith('www.') ? `http://${url}` : url;
-                            return `<a href="${href}" target="_blank" class="inline-flex items-center gap-1 bg-[#2a2a2a] text-blue-400 px-2 py-0.5 rounded text-xs hover:bg-blue-600 hover:text-white transition-colors" onclick="event.stopPropagation()">link <span class="text-[10px]">🔗</span></a>`;
+                            return `<a href="${href}" target="_blank" class="text-blue-500 underline hover:text-blue-400 flex items-center gap-1 inline-flex" onclick="event.stopPropagation()">${url} <span class="text-xs">↗️</span></a>`;
                         });
                     content = `<div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}" onclick="startEditing(${item.originalIndex})">${hText}</div>`;
                 }
                 const p = item.meta.priority;
                 const pClass = isDone ? 'border-l-gray-700 opacity-40' : (p === 'A' ? 'prio-a' : p === 'B' ? 'prio-b' : p === 'C' ? 'prio-c' : 'prio-none');
-                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525]">
+                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525] rounded-r shadow-sm">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     ${content}
                     <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
@@ -240,8 +233,7 @@
 
         function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
-        function setSort(s) { currentSort = s; document.getElementById('sortMenu').classList.add('hidden'); render(); }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
         function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
