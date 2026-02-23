@@ -11,7 +11,7 @@
 
     <div class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v1.5.0-stable</div>
+        <div id="statusText" class="text-gray-500">v1.6.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -22,18 +22,27 @@
     </div>
 
     <header class="p-4 bg-[#1e1e1e] border-b border-[#333]">
-        <div class="max-w-5xl mx-auto flex items-center gap-6">
-            <div class="font-bold text-xl text-blue-500 tracking-tight">DropDotTxt</div>
-            <div class="flex-1 flex gap-2 items-center">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+        <div class="max-w-5xl mx-auto flex flex-col gap-4">
+            <div class="flex items-center gap-6">
+                <div class="font-bold text-xl text-blue-500 tracking-tight cursor-pointer" onclick="clearAllFilters()">DropDotTxt</div>
+                
+                <div class="flex-1 relative">
+                    <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-10 py-1.5 text-xs outline-none focus:border-blue-500 transition-all">
+                    <span class="absolute left-4 top-2 text-gray-600 text-xs">🔍</span>
+                </div>
+
+                <button onclick="doLogout()" class="text-[10px] text-gray-500 hover:text-red-400 uppercase tracking-widest font-bold">Logout</button>
+            </div>
+
+            <div class="flex gap-2 items-center">
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button id="addBtn" onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-colors">Add</button>
                 
-                <div id="filterTag" class="hidden flex items-center bg-blue-900/40 text-blue-400 border border-blue-500/50 px-3 py-1 rounded text-xs font-bold gap-2">
+                <div id="filterTag" class="hidden flex items-center bg-blue-900/40 text-blue-400 border border-blue-500/50 px-3 py-1 rounded text-xs font-bold gap-2 whitespace-nowrap">
                     <span id="activeFilterName"></span>
                     <button onclick="clearFilter()" class="hover:text-white transition-colors">✕</button>
                 </div>
             </div>
-            <button onclick="doLogout()" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</button>
         </div>
     </header>
 
@@ -91,11 +100,13 @@
             }
         }
 
-        async function doLogin() {
+        function doLogin() {
             localStorage.removeItem('dbx_token');
-            const authUrl = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true);
-            localStorage.setItem('dbx_verifier', dbxAuth.getCodeVerifier());
-            window.location.href = authUrl;
+            dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true)
+                .then(authUrl => {
+                    localStorage.setItem('dbx_verifier', dbxAuth.getCodeVerifier());
+                    window.location.href = authUrl;
+                });
         }
 
         function doLogout() {
@@ -114,10 +125,10 @@
                 const response = await dbx.filesDownload({ path: '/todo.txt' });
                 const text = await response.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
-                setStatus('v1.5.0-stable');
+                setStatus('v1.6.0-stable');
                 render();
             } catch (e) {
-                allTasks = ["(A) App Connected! Add a task to begin."];
+                allTasks = ["(A) App Connected!"];
                 render();
             }
         }
@@ -128,14 +139,13 @@
                 const content = allTasks.join('\n');
                 await dbx.filesUpload({ path: '/todo.txt', contents: content, mode: { ".tag": "overwrite" } });
                 setStatus('Synced');
-                setTimeout(() => setStatus('v1.5.0-stable'), 2000);
+                setTimeout(() => setStatus('v1.6.0-stable'), 2000);
             } catch (error) { setStatus('Sync Error', 'error'); }
         }
 
         function addTask() {
             const input = document.getElementById('newTodo');
             if (!input.value.trim()) return;
-            if (allTasks.length === 1 && allTasks[0].includes("App Connected!")) allTasks = [];
             allTasks.push(input.value.trim());
             input.value = "";
             render();
@@ -148,6 +158,12 @@
         }
 
         function clearFilter() {
+            currentFilter = null;
+            render();
+        }
+
+        function clearAllFilters() {
+            document.getElementById('searchInput').value = "";
             currentFilter = null;
             render();
         }
@@ -177,6 +193,7 @@
             const list = document.getElementById('todoList');
             const filterTag = document.getElementById('filterTag');
             const activeFilterName = document.getElementById('activeFilterName');
+            const searchVal = document.getElementById('searchInput').value.toLowerCase();
 
             if (currentFilter) {
                 filterTag.classList.remove('hidden');
@@ -187,35 +204,33 @@
 
             let displayTasks = allTasks.map((text, originalIndex) => ({ text, originalIndex }));
             
+            // Apply Search + Sidebar Filter
             if (currentFilter) {
                 displayTasks = displayTasks.filter(item => item.text.includes(currentFilter));
+            }
+            if (searchVal) {
+                displayTasks = displayTasks.filter(item => item.text.toLowerCase().includes(searchVal));
             }
 
             list.innerHTML = displayTasks.map((item) => {
                 const isDone = item.text.startsWith('x ');
                 let color = "border-l-blue-600";
                 let textColor = "text-gray-200";
-                
-                if(isDone) {
-                    color = "border-l-gray-700 opacity-50";
-                    textColor = "text-gray-500 line-through";
-                } else if(item.text.startsWith("(A)")) {
-                    color = "border-l-red-500";
-                    textColor = "text-red-400 font-bold";
-                }
+                if(isDone) { color = "border-l-gray-700 opacity-50"; textColor = "text-gray-500 line-through"; }
+                else if(item.text.startsWith("(A)")) { color = "border-l-red-500 text-red-400 font-bold"; }
 
                 return `
                 <div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 hover:bg-[#252525] transition-all">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
-                    <input type="text" 
-                           value="${item.text.replace(/"/g, '&quot;')}" 
+                    <input type="text" value="${item.text.replace(/"/g, '&quot;')}" 
                            onblur="updateTaskText(${item.originalIndex}, this.value)"
                            onkeypress="if(event.key === 'Enter') this.blur()"
-                           class="flex-1 bg-transparent outline-none border-none ${textColor} text-sm focus:bg-[#121212] px-1 rounded">
+                           class="flex-1 bg-transparent outline-none border-none ${textColor} text-sm focus:bg-[#121212] px-1 rounded transition-colors">
                     <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 px-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             
+            // Sidebar Update
             const fullText = allTasks.join(' ');
             const renderSidebarItem = (val, colorClass) => 
                 `<div onclick="setFilter('${val}')" class="cursor-pointer ${colorClass} hover:text-white transition-colors truncate">
