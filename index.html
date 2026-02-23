@@ -17,7 +17,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v2.7.1-stable</div>
+        <div id="statusText" class="text-gray-500">v2.7.2-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -36,15 +36,19 @@
                 </div>
                 <div class="flex items-center gap-4 relative">
                     <button onclick="document.getElementById('sortMenu').classList.toggle('hidden')" class="text-[10px] text-blue-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                        <span>Sort:</span> <span id="currentSortLabel" class="text-gray-400">Priority</span>
+                        <span>Sort:</span> <span id="currentSortLabel" class="text-gray-400">Natural</span>
                     </button>
+                    
                     <div id="sortMenu" class="hidden absolute top-full right-0 mt-2 w-48 bg-[#1e1e1e] border border-[#333] rounded-lg z-[100] dropdown-shadow p-2 text-xs">
+                        <button onclick="setSort('natural')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded font-bold text-blue-300">Natural (File Order)</button>
+                        <div class="border-t border-[#333] my-1"></div>
                         <button onclick="setSort('priority')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Priority</button>
                         <button onclick="setSort('due')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Due Date</button>
                         <button onclick="setSort('project')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Project</button>
                         <button onclick="toggleSortDirection()" class="w-full text-left px-3 py-2 hover:bg-orange-600 rounded border-t border-[#333] mt-2">Dir: <span id="sortDirLabel">DESC</span></button>
                     </div>
-                    <button onclick="toggleCompletedVisibility()" id="toggleVisibleBtn" class="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Done: <span id="visibleText">Show</span></button>
+
+                    <button onclick="toggleCompletedVisibility()" class="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Done: <span id="visibleText">Show</span></button>
                     <button onclick="toggleRawEdit()" class="text-[10px] text-orange-400 font-bold uppercase tracking-widest">Edit</button>
                     <button onclick="doLogout()" class="text-[10px] text-gray-500 font-bold uppercase">Logout</button>
                 </div>
@@ -77,7 +81,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, currentSort = 'priority', sortAsc = false;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, currentSort = 'natural', sortAsc = false;
 
         function setStatus(msg, type = 'idle') {
             document.getElementById('statusText').innerText = msg;
@@ -86,7 +90,7 @@
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
-            if (token) { startApp(token); }
+            if (token) startApp(token);
             else {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('code')) {
@@ -109,8 +113,8 @@
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
-                setStatus('v2.7.1-stable'); render();
-            } catch (e) { allTasks = ["# Welcome", "(A) Priority Task", "Normal Task"]; render(); }
+                setStatus('v2.7.2-stable'); render();
+            } catch (e) { allTasks = ["# Welcome", "(A) Task 1", "Task 2"]; render(); }
         }
 
         async function saveTasks() {
@@ -123,8 +127,7 @@
             const p = text.match(/^\(([A-Z])\)/);
             const d = text.match(/due:(\d{4}-\d{2}-\d{2})/);
             const pr = text.match(/\+(\w+)/);
-            const cx = text.match(/@(\w+)/);
-            return { priority: p ? p[1] : 'Z', due: d ? d[1] : '9999-12-31', project: pr ? pr[1] : 'ZZZ', context: cx ? cx[1] : 'ZZZ', isHeader: text.startsWith('#') };
+            return { priority: p ? p[1] : 'Z', due: d ? d[1] : '9999-12-31', project: pr ? pr[1] : 'ZZZ', isHeader: text.startsWith('#') };
         }
 
         function render() {
@@ -135,11 +138,17 @@
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
-            display.sort((a, b) => {
-                if (a.meta.isHeader || b.meta.isHeader) return (a.meta.isHeader && b.meta.isHeader) ? a.originalIndex - b.originalIndex : (a.meta.isHeader ? -1 : 1);
-                let comp = a.meta[currentSort].localeCompare(b.meta[currentSort]);
-                return comp === 0 ? a.originalIndex - b.originalIndex : (sortAsc ? comp : -comp);
-            });
+            // Sorting Logic
+            if (currentSort !== 'natural') {
+                display.sort((a, b) => {
+                    if (a.meta.isHeader || b.meta.isHeader) return (a.meta.isHeader && b.meta.isHeader) ? a.originalIndex - b.originalIndex : (a.meta.isHeader ? -1 : 1);
+                    let comp = a.meta[currentSort].localeCompare(b.meta[currentSort]);
+                    return comp === 0 ? a.originalIndex - b.originalIndex : (sortAsc ? comp : -comp);
+                });
+            } else {
+                // Natural sort just uses the original file index
+                display.sort((a, b) => a.originalIndex - b.originalIndex);
+            }
 
             list.innerHTML = display.map(item => {
                 if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-xs tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
