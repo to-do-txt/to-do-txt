@@ -13,13 +13,14 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #121212; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        #rawEditor { scrollbar-gutter: stable; }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v2.0.0-stable</div>
+        <div id="statusText" class="text-gray-500">v2.1.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -38,16 +39,17 @@
                     <span class="absolute left-4 top-2 text-gray-600 text-xs">🔍</span>
                 </div>
                 <div class="flex items-center gap-4">
+                    <button onclick="toggleRawEdit()" id="rawEditBtn" class="text-[10px] text-orange-400 hover:text-orange-300 font-bold uppercase tracking-widest transition-colors">Raw Edit</button>
                     <button onclick="downloadBackup()" class="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest transition-colors">Backup</button>
                     <button onclick="doLogout()" class="text-[10px] text-gray-500 hover:text-red-400 font-bold uppercase tracking-widest transition-colors">Logout</button>
                 </div>
             </div>
 
-            <div class="flex flex-wrap gap-2 items-center relative">
+            <div id="addBar" class="flex flex-wrap gap-2 items-center relative">
                 <input type="text" id="newTodo" autocomplete="off" oninput="handleInput(event, this)" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 min-w-[200px] bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-all">Add</button>
                 <div id="activeFilters" class="flex flex-wrap gap-2"></div>
-                <button id="resetBtn" onclick="resetAll()" class="hidden text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase cursor-pointer">Reset All</button>
+                <button id="resetBtn" onclick="resetAll()" class="hidden text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase">Reset All</button>
                 <div id="suggestions" class="suggestion-box hidden"></div>
             </div>
         </div>
@@ -63,8 +65,17 @@
             <div id="contextList" class="space-y-1 text-sm font-medium"></div>
         </aside>
 
-        <main class="flex-1 p-6 overflow-y-auto relative">
-            <div id="todoList" class="space-y-1 max-w-4xl mx-auto pb-20"></div>
+        <main class="flex-1 p-6 overflow-y-auto relative flex flex-col">
+            <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
+            
+            <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] text-gray-500 font-mono uppercase">Raw todo.txt editor</span>
+                    <button onclick="saveRawEdit()" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-1 rounded text-xs font-bold uppercase tracking-widest transition-all">Save Changes</button>
+                </div>
+                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none focus:border-orange-500/50 leading-relaxed resize-none"></textarea>
+            </div>
+
             <div id="inlineSuggestions" class="suggestion-box hidden"></div>
         </main>
     </div>
@@ -73,7 +84,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), suggestionTarget = null;
+        let dbx, allTasks = [], activeFilters = new Set(), suggestionTarget = null, isRawEditing = false;
 
         function setStatus(msg, type = 'idle') {
             document.getElementById('statusText').innerText = msg;
@@ -105,7 +116,7 @@
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 allTasks = (await res.result.fileBlob.text()).split('\n').filter(t => t.trim() !== "");
-                setStatus('v2.0.0-stable'); render();
+                setStatus('v2.1.0-stable'); render();
             } catch (e) { allTasks = ["(A) App Connected!"]; render(); }
         }
 
@@ -113,8 +124,37 @@
             setStatus('Syncing...', 'syncing');
             try {
                 await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                setStatus('Synced'); setTimeout(() => setStatus('v2.0.0-stable'), 2000);
+                setStatus('Synced'); setTimeout(() => setStatus('v2.1.0-stable'), 2000);
             } catch (e) { setStatus('Sync Error', 'error'); }
+        }
+
+        function toggleRawEdit() {
+            isRawEditing = !isRawEditing;
+            const list = document.getElementById('todoList');
+            const editorCont = document.getElementById('rawEditorContainer');
+            const addBar = document.getElementById('addBar');
+            const btn = document.getElementById('rawEditBtn');
+
+            if (isRawEditing) {
+                document.getElementById('rawEditor').value = allTasks.join('\n');
+                list.classList.add('hidden');
+                addBar.classList.add('invisible');
+                editorCont.classList.remove('hidden');
+                btn.innerText = "Close Editor";
+            } else {
+                list.classList.remove('hidden');
+                addBar.classList.remove('invisible');
+                editorCont.classList.add('hidden');
+                btn.innerText = "Raw Edit";
+            }
+        }
+
+        function saveRawEdit() {
+            const rawValue = document.getElementById('rawEditor').value;
+            allTasks = rawValue.split('\n').filter(t => t.trim() !== "");
+            saveTasks();
+            toggleRawEdit();
+            render();
         }
 
         function downloadBackup() {
@@ -135,8 +175,7 @@
 
         function handleInput(e, inputEl) {
             const val = inputEl.value;
-            const cursor = inputEl.selectionStart;
-            const words = val.substring(0, cursor).split(/\s/);
+            const words = val.substring(0, inputEl.selectionStart).split(/\s/);
             const lastWord = words[words.length - 1];
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) showSuggestions(lastWord, inputEl);
             else hideSuggestions();
@@ -175,6 +214,7 @@
         function resetAll() {
             activeFilters.clear();
             document.getElementById('searchInput').value = "";
+            if(isRawEditing) toggleRawEdit();
             render();
         }
 
@@ -210,23 +250,15 @@
                 </div>`;
             }).join('');
 
-            // Sidebar with Open Task Counts
             const openTasks = allTasks.filter(t => !t.startsWith('x '));
             const sidebar = (id, re, c) => {
-                const allMatches = allTasks.join(' ').match(re) || [];
-                const uniqueMatches = [...new Set(allMatches)].sort();
-                
+                const uniqueMatches = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = uniqueMatches.map(v => {
                     const count = openTasks.filter(t => t.includes(v)).length;
-                    if (count === 0 && !activeFilters.has(v)) return ""; // Hide empty filters unless they are active
-                    return `
-                    <div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer group mb-1">
-                        <span class="truncate transition-colors ${activeFilters.has(v) ? 'text-white font-bold' : c + ' hover:text-white'}">
-                            ${v.replace('due:','')}
-                        </span>
-                        <span class="text-[10px] bg-[#222] text-gray-500 px-1.5 py-0.5 rounded border border-[#333] group-hover:border-gray-600">
-                            ${count}
-                        </span>
+                    if (count === 0 && !activeFilters.has(v)) return "";
+                    return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer group mb-1">
+                        <span class="truncate transition-colors ${activeFilters.has(v) ? 'text-white font-bold' : c + ' hover:text-white'}">${v.replace('due:','')}</span>
+                        <span class="text-[10px] bg-[#222] text-gray-500 px-1.5 py-0.5 rounded border border-[#333]">${count}</span>
                     </div>`;
                 }).join('');
             };
