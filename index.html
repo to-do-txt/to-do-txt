@@ -16,14 +16,9 @@
         .prio-b { border-left-color: #facc15 !important; }
         .prio-none { border-left-color: #3b82f6 !important; }
         
-        #sidebar { transition: transform 0.3s ease-in-out; }
-        @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
-        
         .task-row .task-actions { opacity: 0; transition: opacity 0.1s ease; }
         .task-row:hover .task-actions { opacity: 1; }
-        @media (max-width: 768px) { .task-actions { opacity: 1; } }
-
-        /* Match the "Good" Header Styling */
+        
         .header-line {
             padding-top: 1.5rem;
             padding-bottom: 0.5rem;
@@ -33,23 +28,25 @@
             font-weight: 900;
             text-transform: uppercase;
             font-size: 0.75rem;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.1em;
         }
+        
+        .task-link { color: #60a5fa; text-decoration: underline; cursor: pointer; }
+        .task-link:hover { color: #93c5fd; }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[9px] font-mono z-50 flex items-center gap-3 bg-[#0a0a0a]/90 px-3 py-1.5 rounded-full border border-[#333]">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText" class="text-gray-500 font-mono">v3.5.1</div>
+        <div id="statusText" class="text-gray-500">v3.5.2 | Links & Smart Headers</div>
     </div>
 
     <header class="p-6 bg-[#121212] z-40">
         <div class="max-w-4xl mx-auto">
             <div class="flex items-center justify-between mb-6">
-                <button onclick="toggleSidebar()" class="md:hidden text-gray-400 text-xl">☰</button>
-                <div class="font-bold text-xl text-blue-500 tracking-tighter cursor-pointer mx-auto md:mx-0" onclick="resetAll()">to-do-txt</div>
-                <div class="hidden md:flex gap-6 text-[10px] font-bold uppercase text-gray-500">
+                <div class="font-bold text-xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetAll()">to-do-txt</div>
+                <div class="flex gap-6 text-[10px] font-bold uppercase text-gray-500">
                     <button onclick="toggleCompletedVisibility()" id="toggleDoneBtn" class="hover:text-blue-400">Hide Done</button>
                     <button onclick="toggleRawEdit()" class="hover:text-blue-400">Raw File</button>
                     <button onclick="doLogout()" class="hover:text-red-500">Logout</button>
@@ -57,18 +54,17 @@
             </div>
             
             <div class="space-y-3">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Filter tasks..." class="w-full bg-[#0a0a0a] border border-[#222] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white shadow-inner">
-                
+                <input type="text" id="searchInput" oninput="render()" placeholder="Filter..." class="w-full bg-[#0a0a0a] border border-[#222] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white">
                 <div class="flex gap-2">
                     <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 bg-[#0a0a0a] border border-[#222] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
-                    <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500 transition shadow-lg">Add</button>
+                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500">Add</button>
                 </div>
             </div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-8 z-50 border-r border-[#1e1e1e] md:relative md:translate-x-0 md:block overflow-y-auto">
+        <aside id="sidebar" class="hidden md:block w-64 bg-[#121212] p-8 border-r border-[#1e1e1e] overflow-y-auto">
             <div id="dashboardMetrics" class="mb-10 space-y-3"></div>
             <div class="mb-10"><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-[0.2em]">Priority</h2><div id="priorityList" class="space-y-2"></div></div>
             <div class="mb-10"><h2 class="text-[10px] font-black text-gray-700 mb-4 uppercase tracking-[0.2em]">Projects</h2><div id="projectList" class="space-y-2"></div></div>
@@ -77,10 +73,9 @@
 
         <main class="flex-1 overflow-y-auto bg-[#121212] p-4 md:p-8">
             <div id="todoList" class="max-w-4xl mx-auto space-y-1"></div>
-            
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
                 <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-6 border border-[#222] rounded outline-none h-[60vh]"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-blue-600 py-3 rounded text-xs font-bold uppercase tracking-widest">Update todo.txt</button>
+                <button onclick="saveRawEdit()" class="mt-4 bg-blue-600 py-3 rounded text-xs font-bold uppercase">Update todo.txt</button>
             </div>
         </main>
     </div>
@@ -102,7 +97,7 @@
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
                     localStorage.setItem('dbx_token', resp.result.access_token);
                     window.location.href = REDIRECT_URI;
-                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold hover:bg-blue-500 transition">Connect Dropbox</button></div>`;
+                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold">Connect Dropbox</button></div>`;
             }
         }
 
@@ -159,29 +154,56 @@
 
         function render() {
             const list = document.getElementById('todoList'), search = (document.getElementById('searchInput')?.value || "").toLowerCase();
-            let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
+            let rawItems = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
 
-            if (!showCompleted) display = display.filter(t => !t.meta.isDone || t.meta.isHeader);
-            if (filterPastDue) display = display.filter(t => t.meta.isPastDue || t.meta.isHeader);
+            // Apply filters to tasks only
+            let filteredItems = rawItems.filter(item => {
+                if (item.meta.isHeader) return true;
+                if (!showCompleted && item.meta.isDone) return false;
+                if (filterPastDue && !item.meta.isPastDue) return false;
+                if (search && !item.text.toLowerCase().includes(search)) return false;
+                for (let f of activeFilters) { if (!item.text.includes(f)) return false; }
+                return true;
+            });
+
+            // Smart Header logic: Remove headers that have no tasks following them until the next header
+            let finalDisplay = [];
+            for (let i = 0; i < filteredItems.length; i++) {
+                if (filteredItems[i].meta.isHeader) {
+                    let hasTasks = false;
+                    for (let j = i + 1; j < filteredItems.length; j++) {
+                        if (filteredItems[j].meta.isHeader) break;
+                        hasTasks = true;
+                        break;
+                    }
+                    if (hasTasks) finalDisplay.push(filteredItems[i]);
+                } else {
+                    finalDisplay.push(filteredItems[i]);
+                }
+            }
             
-            // Re-apply Filters logic
-            activeFilters.forEach(f => display = display.filter(t => t.text.includes(f) || t.meta.isHeader));
-            if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
-            
-            list.innerHTML = display.map(item => {
+            list.innerHTML = finalDisplay.map(item => {
                 if (item.meta.isHeader) {
                     return `<div class="header-line">${item.text.replace(/^[#\-\s]*/, '')}</div>`;
                 }
                 const pClass = item.meta.isDone ? 'opacity-30 border-l-gray-800' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : 'prio-none');
-                const content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>')
+                
+                // Content Rendering with Links
+                let content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>')
                                          .replace(/(@\w+)/g, '<span class="text-green-500">$1</span>')
                                          .replace(/(due:\d{4}-\d{2}-\d{2})/g, m => `<span class="${item.meta.isPastDue ? 'text-red-500 font-bold' : 'text-yellow-500/80'}">${m}</span>`);
+                
+                // Link detection (link:url or naked https://)
+                content = content.replace(/(link:|https?:\/\/)([^\s]+)/g, (match, prefix, url) => {
+                    const fullUrl = prefix === 'link:' ? (url.startsWith('http') ? url : 'https://' + url) : prefix + url;
+                    return `<a href="${fullUrl}" target="_blank" class="task-link">link</a>`;
+                });
                 
                 return `<div class="task-row group flex items-center bg-[#1e1e1e]/50 border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#222] transition-all">
                     <input type="checkbox" ${item.meta.isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-sm ${item.meta.isDone ? 'line-through text-gray-500 italic' : ''}" ondblclick="editTaskText(${item.originalIndex})">${content}</div>
                     <div class="task-actions flex items-center px-2">
-                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 transition-colors p-1">✕</button>
+                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 p-1">✕</button>
                     </div>
                 </div>`;
             }).join('');
@@ -195,7 +217,7 @@
         }
 
         function deleteTask(i) {
-            if (confirm("Delete this task?")) { allTasks.splice(i, 1); render(); saveTasks(); }
+            if (confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); }
         }
 
         function editTaskText(i) {
@@ -234,7 +256,6 @@
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function togglePastDue() { filterPastDue = !filterPastDue; render(); }
         function toggleCompletedVisibility() { showCompleted = !showCompleted; document.getElementById('toggleDoneBtn').innerText = showCompleted ? "Hide Done" : "Show Done"; render(); }
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function resetAll() { activeFilters.clear(); filterPastDue = false; document.getElementById('searchInput').value = ""; render(); }
