@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.3.2</title>
+    <title>to-do-txt v3.3.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <meta name="theme-color" content="#1e1e1e">
@@ -27,7 +27,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText">v3.3.2</div>
+        <div id="statusText">v3.3.3</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
@@ -50,6 +50,7 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-4 text-[9px] font-bold uppercase tracking-widest">
+                    <button id="resetBtn" onclick="resetAll()" class="text-red-400 hidden">Reset Filters</button>
                     <button onclick="downloadBackup()" class="text-blue-400">Backup</button>
                     <button onclick="toggleHeaderVisibility()" id="headerToggle" class="text-green-400">Hide Headers</button>
                     <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
@@ -193,6 +194,15 @@
 
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
+            const resetBtn = document.getElementById('resetBtn');
+            
+            // Show/Hide Reset Button
+            if (activeFilters.size > 0 || search.length > 0) {
+                resetBtn.classList.remove('hidden');
+            } else {
+                resetBtn.classList.add('hidden');
+            }
+
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
