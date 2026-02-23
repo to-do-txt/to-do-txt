@@ -17,6 +17,7 @@
         .prio-b { border-color: #facc15 !important; }
         .prio-c { border-color: #4ade80 !important; }
         .prio-none { border-color: #3b82f6 !important; }
+        .overdue-alert { border-right: 2px solid #ef4444 !important; box-shadow: 0 0 10px rgba(239, 68, 68, 0.15); }
         #sidebar { transition: transform 0.3s ease-in-out; }
         @media (max-width: 768px) {
             #sidebar.closed { transform: translateX(-100%); }
@@ -30,7 +31,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.1.7</div>
+        <div id="statusText">v3.1.8</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Syncing...</div>
     </div>
 
@@ -230,7 +231,6 @@
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
 
-            // Multidimensional Filtering
             activeFilters.forEach(f => {
                 if (f === 'PAST_DUE') {
                     display = display.filter(t => t.meta.isPastDue || t.meta.isHeader);
@@ -253,7 +253,7 @@
                         .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>')
                         .replace(/(\+\w+)/g, '<span class="text-blue-400 font-bold">$1</span>')
                         .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
-                        .replace(/(due:\d{4}-\d{2}-\d{2})/g, `<span class="${item.meta.isPastDue ? 'text-red-500 underline decoration-dotted' : 'text-yellow-500'}">$1</span>`)
+                        .replace(/(due:\d{4}-\d{2}-\d{2})/g, `<span class="${item.meta.isPastDue ? 'text-red-500 underline decoration-dotted font-bold' : 'text-yellow-500'}">$1</span>`)
                         .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
                         .replace(/link:((https?:\/\/|www\.)[^\s]+)/g, (match, url) => {
                             const href = url.startsWith('www.') ? `http://${url}` : url;
@@ -263,7 +263,11 @@
                 }
                 const p = item.meta.priority;
                 const pClass = isDone ? 'border-l-gray-700 opacity-40' : (p === 'A' ? 'prio-a' : p === 'B' ? 'prio-b' : p === 'C' ? 'prio-c' : 'prio-none');
-                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525] rounded-r shadow-sm">
+                const overdueStyle = (!isDone && item.meta.isPastDue) ? 'overdue-alert' : '';
+                const alertIcon = (!isDone && item.meta.isPastDue) ? '<div class="w-1.5 h-1.5 bg-red-500 mr-2 rounded-sm shrink-0"></div>' : '';
+
+                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} ${overdueStyle} mb-1 p-3 hover:bg-[#252525] rounded-r shadow-sm">
+                    ${alertIcon}
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     ${content}
                     <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
@@ -282,7 +286,7 @@
                 pdCont.classList.remove('hidden');
                 document.getElementById('pastDueList').innerHTML = `
                     <div onclick="toggleFilter('PAST_DUE')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has('PAST_DUE') ? 'text-white font-bold' : 'text-red-400 hover:text-red-300'}">
-                        <span>All Overdue</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded text-gray-400">${overdueCount}</span>
+                        <span class="flex items-center gap-2"><div class="w-2 h-2 bg-red-500 rounded-sm"></div> Overdue</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded text-gray-400">${overdueCount}</span>
                     </div>`;
             } else { pdCont.classList.add('hidden'); }
 
