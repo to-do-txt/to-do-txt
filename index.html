@@ -10,23 +10,21 @@
         .suggestion-box { position: absolute; z-index: 100; background: #1e1e1e; border: 1px solid #333; border-radius: 4px; max-height: 150px; overflow-y: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 12px; }
         .suggestion-item:hover { background: #2563eb; color: white; }
-        /* Custom scrollbar for a pro look */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #121212; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #444; }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v1.8.0-stable</div>
+        <div id="statusText" class="text-gray-500">v1.9.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800">
-            <h1 class="text-3xl font-bold mb-4 text-blue-500 text-3xl">DropDotTxt</h1>
+            <h1 class="text-3xl font-bold mb-4 text-blue-500">DropDotTxt</h1>
             <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold">Connect Dropbox</button>
         </div>
     </div>
@@ -34,7 +32,7 @@
     <header class="p-4 bg-[#1e1e1e] border-b border-[#333]">
         <div class="max-w-5xl mx-auto flex flex-col gap-4">
             <div class="flex items-center gap-6">
-                <div class="font-bold text-xl text-blue-500 cursor-pointer" onclick="clearAllFilters()">DropDotTxt</div>
+                <div class="font-bold text-xl text-blue-500 cursor-pointer" onclick="resetAll()">DropDotTxt</div>
                 <div class="flex-1 relative">
                     <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-10 py-1.5 text-xs outline-none focus:border-blue-500">
                     <span class="absolute left-4 top-2 text-gray-600 text-xs">🔍</span>
@@ -45,13 +43,14 @@
                 </div>
             </div>
 
-            <div class="flex gap-2 items-center relative">
-                <input type="text" id="newTodo" autocomplete="off" oninput="handleInput(event, this)" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+            <div class="flex flex-wrap gap-2 items-center relative">
+                <input type="text" id="newTodo" autocomplete="off" oninput="handleInput(event, this)" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 min-w-[200px] bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-all">Add</button>
-                <div id="filterTag" class="hidden flex items-center bg-blue-900/40 text-blue-400 border border-blue-500 px-3 py-1 rounded text-xs font-bold gap-2">
-                    <span id="activeFilterName"></span>
-                    <button onclick="clearFilter()" class="hover:text-white">✕</button>
-                </div>
+                
+                <div id="activeFilters" class="flex flex-wrap gap-2"></div>
+                
+                <button id="resetBtn" onclick="resetAll()" class="hidden text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase">Reset All</button>
+
                 <div id="suggestions" class="suggestion-box hidden"></div>
             </div>
         </div>
@@ -77,7 +76,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], currentFilter = null, suggestionTarget = null;
+        let dbx, allTasks = [], activeFilters = new Set(), suggestionTarget = null;
 
         function setStatus(msg, type = 'idle') {
             document.getElementById('statusText').innerText = msg;
@@ -109,7 +108,7 @@
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 allTasks = (await res.result.fileBlob.text()).split('\n').filter(t => t.trim() !== "");
-                setStatus('v1.8.0-stable'); render();
+                setStatus('v1.9.0-stable'); render();
             } catch (e) { allTasks = ["(A) App Connected!"]; render(); }
         }
 
@@ -117,7 +116,7 @@
             setStatus('Syncing...', 'syncing');
             try {
                 await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                setStatus('Synced'); setTimeout(() => setStatus('v1.8.0-stable'), 2000);
+                setStatus('Synced'); setTimeout(() => setStatus('v1.9.0-stable'), 2000);
             } catch (e) { setStatus('Sync Error', 'error'); }
         }
 
@@ -125,11 +124,9 @@
             const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            const date = new Date().toISOString().split('T')[0];
             a.href = url;
-            a.download = `todo-backup-${date}.txt`;
+            a.download = `todo-backup-${new Date().toISOString().split('T')[0]}.txt`;
             a.click();
-            window.URL.revokeObjectURL(url);
         }
 
         function addTask() {
@@ -172,11 +169,41 @@
 
         function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); document.getElementById('inlineSuggestions').classList.add('hidden'); }
 
+        function toggleFilter(f) {
+            if (activeFilters.has(f)) activeFilters.delete(f);
+            else activeFilters.add(f);
+            render();
+        }
+
+        function resetAll() {
+            activeFilters.clear();
+            document.getElementById('searchInput').value = "";
+            render();
+        }
+
         function render() {
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
+            const filterContainer = document.getElementById('activeFilters');
+            const resetBtn = document.getElementById('resetBtn');
+
+            // Render Filter Pills
+            filterContainer.innerHTML = Array.from(activeFilters).map(f => `
+                <div class="flex items-center bg-blue-900/40 text-blue-400 border border-blue-500/50 px-3 py-1 rounded text-xs font-bold gap-2">
+                    <span>${f.includes('due:') ? f.replace('due:', '') : f}</span>
+                    <button onclick="toggleFilter('${f}')" class="hover:text-white">✕</button>
+                </div>
+            `).join('');
+
+            resetBtn.className = (activeFilters.size > 0 || search) ? 'block text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase cursor-pointer' : 'hidden';
+
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex }));
-            if (currentFilter) display = display.filter(t => t.text.includes(currentFilter));
+            
+            // Apply ALL active filters (AND logic)
+            activeFilters.forEach(f => {
+                display = display.filter(t => t.text.includes(f));
+            });
+            
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search));
 
             list.innerHTML = display.map(item => {
@@ -196,20 +223,18 @@
             const ft = allTasks.join(' ');
             const sidebar = (id, re, c) => {
                 const m = [...new Set(ft.match(re))].sort();
-                document.getElementById(id).innerHTML = m.map(v => `<div onclick="setFilter('${v}')" class="cursor-pointer ${c} hover:text-white truncate transition-colors">${v.replace('due:','')}</div>`).join('');
+                document.getElementById(id).innerHTML = m.map(v => `
+                    <div onclick="toggleFilter('${v}')" class="cursor-pointer ${activeFilters.has(v) ? 'text-white font-bold' : c} hover:text-white truncate transition-colors">
+                        ${v.replace('due:','')}
+                    </div>`).join('');
             };
             sidebar('dueList', /due:\d{4}-\d{2}-\d{2}/g, 'text-yellow-500');
             sidebar('projectList', /\+\w+/g, 'text-blue-400');
             sidebar('contextList', /@\w+/g, 'text-green-400');
-            document.getElementById('filterTag').className = currentFilter ? 'flex items-center bg-blue-900/40 text-blue-400 border border-blue-500 px-3 py-1 rounded text-xs font-bold gap-2' : 'hidden';
-            document.getElementById('activeFilterName').innerText = currentFilter || '';
         }
 
-        function setFilter(f) { currentFilter = f; render(); }
-        function clearFilter() { currentFilter = null; render(); }
-        function clearAllFilters() { document.getElementById('searchInput').value = ""; clearFilter(); }
         function toggleTask(i) { const today = new Date().toISOString().split('T')[0]; allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${today} ${allTasks[i]}`; render(); saveTasks(); }
-        function updateTaskText(i, val) { if (allTasks[i] !== val.trim()) { allTasks[i] = val.trim(); saveTasks(); render(); } }
+        function updateTaskText(i, val) { if (allTasks[i] !== val.trim() && val.trim() !== "") { allTasks[i] = val.trim(); saveTasks(); render(); } }
         function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
 
         init();
