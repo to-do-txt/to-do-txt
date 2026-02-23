@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.2.7</title>
+    <title>to-do-txt v3.2.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <meta name="theme-color" content="#1e1e1e">
@@ -29,8 +29,15 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.2.7</div>
+        <div id="statusText">v3.2.8</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Syncing...</div>
+    </div>
+
+    <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
+        <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 mx-4">
+            <h1 class="text-2xl font-bold mb-4 text-blue-500 font-black tracking-tighter">to-do-txt</h1>
+            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white shadow-lg">Connect Dropbox</button>
+        </div>
     </div>
 
     <header class="p-4 bg-[#1e1e1e] border-b border-[#333] z-40">
@@ -102,6 +109,19 @@
             const token = localStorage.getItem('dbx_token');
             if (token) { startApp(token); window.addEventListener('focus', checkForChanges); setInterval(checkForChanges, 30000); } 
             else { const urlParams = new URLSearchParams(window.location.search); if (urlParams.get('code')) { const verifier = localStorage.getItem('dbx_verifier'); dbxAuth.setCodeVerifier(verifier); const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code')); localStorage.setItem('dbx_token', resp.result.access_token); window.location.href = REDIRECT_URI; } else document.getElementById('loginOverlay')?.classList.remove('hidden'); }
+        }
+
+        async function doLogin() {
+            const verifier = dbxAuth.getCodeVerifier();
+            localStorage.setItem('dbx_verifier', verifier);
+            const authUrl = await dbxAuth.getAuthenticationUrl(REDIRECT_URI, undefined, 'code', 'offline', undefined, undefined, true);
+            window.location.href = authUrl;
+        }
+
+        function doLogout() {
+            localStorage.removeItem('dbx_token');
+            localStorage.removeItem('dbx_verifier');
+            window.location.href = REDIRECT_URI;
         }
 
         function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
@@ -192,10 +212,6 @@
         }
 
         function updateSidebars(currentVisibleTasks) {
-            // "Open" tasks that aren't headers, used for global context
-            const openOnly = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#') && !t.startsWith('--'));
-            
-            // 1. Past Due (Depends on active filters)
             const pdCount = currentVisibleTasks.filter(t => !t.text.startsWith('x ') && t.meta.isPastDue).length;
             const pdCont = document.getElementById('pastDueContainer');
             if (pdCount > 0 || activeFilters.has('PAST_DUE')) {
@@ -203,26 +219,19 @@
                 document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('PAST_DUE')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has('PAST_DUE') ? 'text-white font-bold' : 'text-red-400'}"><span>Overdue</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded">${pdCount}</span></div>`;
             } else pdCont.classList.add('hidden');
 
-            // 2. Dynamic Tag Sidebar Logic
             const sb = (id, re, colorClass) => {
                 const map = {}; 
-                // First, find all unique tags in the entire file so the list doesn't disappear
                 allTasks.forEach(t => { (t.match(re) || []).forEach(v => map[v] = 0); });
-                
-                // Then, count how many of those tags are in the CURRENTLY visible filtered set
                 currentVisibleTasks.forEach(t => { 
                     if(t.text.startsWith('x ') || t.meta.isHeader) return;
                     (t.text.match(re) || []).forEach(v => map[v]++); 
                 });
-
                 document.getElementById(id).innerHTML = Object.keys(map).sort().map(v => {
                     const count = map[v];
-                    // If count is 0 and it's not active, don't show it unless we want a full static list
                     if (count === 0 && !activeFilters.has(v)) return "";
                     return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has(v) ? 'text-white font-bold' : colorClass}"><span>${v.replace('due:','').replace(/[()]/g,'')}</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded ${count === 0 ? 'text-gray-600' : ''}">${count}</span></div>`;
                 }).join('');
             };
-
             sb('priorityList', /\([A-Z]\)/g, 'text-orange-400');
             sb('dueList', REGEX_DUE, 'text-yellow-500');
             sb('projectList', REGEX_PROJECT, 'text-blue-400');
