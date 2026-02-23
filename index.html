@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.2.6</title>
+    <title>to-do-txt v3.2.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <meta name="theme-color" content="#1e1e1e">
@@ -29,7 +29,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.2.6</div>
+        <div id="statusText">v3.2.7</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Syncing...</div>
     </div>
 
@@ -40,7 +40,7 @@
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
                     <div class="flex items-baseline gap-2">
                         <div class="font-bold text-lg md:text-xl text-blue-500 cursor-pointer tracking-tighter" onclick="resetAll()">to-do-txt</div>
-                        <button onclick="loadTasks()" id="syncBtn" class="text-[9px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 text-gray-400 uppercase tracking-tighter">Sync</button>
+                        <button onclick="loadTasks()" id="syncBtn" class="text-[9px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 text-gray-400 uppercase tracking-tighter transition-all">Sync</button>
                     </div>
                 </div>
                 <div class="flex items-center gap-4 text-[9px] font-bold uppercase tracking-widest">
@@ -112,7 +112,6 @@
             const btn = document.getElementById('syncBtn');
             const indicator = document.getElementById('syncIndicator');
             if(btn) { btn.innerText = "LOCKED"; btn.disabled = true; btn.classList.add('syncing-anim'); }
-            
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 lastServerTag = res.result.rev;
@@ -152,6 +151,84 @@
             return { priority: p ? p[1] : 'Z', due: d ? d[0] : '9999-12-31', project: pr ? pr[0] : 'ZZZ', isHeader, isPastDue };
         }
 
+        function render() {
+            const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
+            let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
+            
+            if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
+            
+            activeFilters.forEach(f => { if (f === 'PAST_DUE') { display = display.filter(t => t.meta.isPastDue || t.meta.isHeader); } else { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); } });
+            if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+
+            list.innerHTML = display.map(item => {
+                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
+                const isDone = item.text.startsWith('x ');
+                if (editingIndex === item.originalIndex) return `<div class="p-2 bg-[#1e1e1e] rounded"><input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-black border border-blue-500 rounded px-2 py-1 text-sm outline-none text-white" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)"></div>`;
+
+                let links = [];
+                let workingText = item.text.replace(REGEX_LINK, (match, url) => {
+                    const placeholder = `__LNK_${links.length}__`;
+                    links.push(`<a href="${url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`);
+                    return placeholder;
+                });
+
+                workingText = workingText
+                    .replace(REGEX_PRIO_START, (match, p) => `<span class="text-orange-400 font-bold">(${p})</span>`)
+                    .replace(REGEX_PROJECT, (match) => `<span class="text-blue-400 font-bold">${match}</span>`)
+                    .replace(REGEX_CONTEXT, (match) => `<span class="text-green-400 font-bold">${match}</span>`)
+                    .replace(REGEX_DUE, (match) => `<span class="${item.meta.isPastDue ? 'text-red-500 underline decoration-dotted font-bold' : 'text-yellow-500'}">${match}</span>`)
+                    .replace(/(\d{4}[-.]\d{2}[-.]\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>');
+
+                links.forEach((l, i) => workingText = workingText.replace(`__LNK_${i}__`, l));
+                const pClass = isDone ? 'border-l-gray-700 opacity-40' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : item.meta.priority === 'C' ? 'prio-c' : 'prio-none');
+                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} ${(!isDone && item.meta.isPastDue) ? 'overdue-alert' : ''} mb-1 p-3 hover:bg-[#252525] rounded-r shadow-sm">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
+                    <div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 italic' : ''}" onclick="startEditing(${item.originalIndex})">${workingText}</div>
+                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
+                </div>`;
+            }).join('');
+            updateSidebars(display);
+        }
+
+        function updateSidebars(currentVisibleTasks) {
+            // "Open" tasks that aren't headers, used for global context
+            const openOnly = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#') && !t.startsWith('--'));
+            
+            // 1. Past Due (Depends on active filters)
+            const pdCount = currentVisibleTasks.filter(t => !t.text.startsWith('x ') && t.meta.isPastDue).length;
+            const pdCont = document.getElementById('pastDueContainer');
+            if (pdCount > 0 || activeFilters.has('PAST_DUE')) {
+                pdCont.classList.remove('hidden');
+                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('PAST_DUE')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has('PAST_DUE') ? 'text-white font-bold' : 'text-red-400'}"><span>Overdue</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded">${pdCount}</span></div>`;
+            } else pdCont.classList.add('hidden');
+
+            // 2. Dynamic Tag Sidebar Logic
+            const sb = (id, re, colorClass) => {
+                const map = {}; 
+                // First, find all unique tags in the entire file so the list doesn't disappear
+                allTasks.forEach(t => { (t.match(re) || []).forEach(v => map[v] = 0); });
+                
+                // Then, count how many of those tags are in the CURRENTLY visible filtered set
+                currentVisibleTasks.forEach(t => { 
+                    if(t.text.startsWith('x ') || t.meta.isHeader) return;
+                    (t.text.match(re) || []).forEach(v => map[v]++); 
+                });
+
+                document.getElementById(id).innerHTML = Object.keys(map).sort().map(v => {
+                    const count = map[v];
+                    // If count is 0 and it's not active, don't show it unless we want a full static list
+                    if (count === 0 && !activeFilters.has(v)) return "";
+                    return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has(v) ? 'text-white font-bold' : colorClass}"><span>${v.replace('due:','').replace(/[()]/g,'')}</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded ${count === 0 ? 'text-gray-600' : ''}">${count}</span></div>`;
+                }).join('');
+            };
+
+            sb('priorityList', /\([A-Z]\)/g, 'text-orange-400');
+            sb('dueList', REGEX_DUE, 'text-yellow-500');
+            sb('projectList', REGEX_PROJECT, 'text-blue-400');
+            sb('contextList', REGEX_CONTEXT, 'text-green-400');
+        }
+
         function handleInput(e) {
             const val = e.target.value; const cursor = e.target.selectionStart; const words = val.slice(0, cursor).split(/\s+/); const lastWord = words.pop();
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) { showSuggestions(lastWord); } else { hideSuggestions(); }
@@ -186,63 +263,6 @@
             const today = new Date().toISOString().split('T')[0]; const prioMatch = text.match(REGEX_PRIO_START);
             if (prioMatch) { text = `${prioMatch[0]} ${today} ${text.replace(REGEX_PRIO_START, '').trim()}`; } else { text = `${today} ${text}`; }
             allTasks.push(text); inp.value = ""; render(); saveTasks();
-        }
-
-        function render() {
-            const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
-            let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
-            
-            if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
-            if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
-            
-            activeFilters.forEach(f => { if (f === 'PAST_DUE') { display = display.filter(t => t.meta.isPastDue || t.meta.isHeader); } else { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); } });
-            if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
-
-            list.innerHTML = display.map(item => {
-                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
-                const isDone = item.text.startsWith('x ');
-                if (editingIndex === item.originalIndex) return `<div class="p-2 bg-[#1e1e1e] rounded"><input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-black border border-blue-500 rounded px-2 py-1 text-sm outline-none text-white" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)"></div>`;
-
-                let links = [];
-                let workingText = item.text.replace(REGEX_LINK, (match, url) => {
-                    const placeholder = `__LNK_${links.length}__`;
-                    links.push(`<a href="${url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`);
-                    return placeholder;
-                });
-
-                workingText = workingText
-                    .replace(REGEX_PRIO_START, (match, p) => `<span class="text-orange-400 font-bold">(${p})</span>`)
-                    .replace(REGEX_PROJECT, (match) => `<span class="text-blue-400 font-bold">${match}</span>`)
-                    .replace(REGEX_CONTEXT, (match) => `<span class="text-green-400 font-bold">${match}</span>`)
-                    .replace(REGEX_DUE, (match) => `<span class="${item.meta.isPastDue ? 'text-red-500 underline decoration-dotted font-bold' : 'text-yellow-500'}">${match}</span>`)
-                    .replace(/(\d{4}[-.]\d{2}[-.]\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>');
-
-                links.forEach((l, i) => workingText = workingText.replace(`__LNK_${i}__`, l));
-
-                const pClass = isDone ? 'border-l-gray-700 opacity-40' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : item.meta.priority === 'C' ? 'prio-c' : 'prio-none');
-                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} ${(!isDone && item.meta.isPastDue) ? 'overdue-alert' : ''} mb-1 p-3 hover:bg-[#252525] rounded-r shadow-sm">
-                    ${(!isDone && item.meta.isPastDue) ? '<div class="w-1.5 h-1.5 bg-red-500 mr-2 rounded-sm"></div>' : ''}
-                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
-                    <div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 italic' : ''}" onclick="startEditing(${item.originalIndex})">${workingText}</div>
-                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
-                </div>`;
-            }).join('');
-            updateSidebars();
-        }
-
-        function updateSidebars() {
-            const open = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#') && !t.startsWith('--'));
-            const overdueCount = open.filter(t => getTaskMeta(t).isPastDue).length;
-            const pdCont = document.getElementById('pastDueContainer');
-            if (overdueCount > 0) { pdCont.classList.remove('hidden'); document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('PAST_DUE')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has('PAST_DUE') ? 'text-white' : 'text-red-400'}"><span>Overdue</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded">${overdueCount}</span></div>`; } else pdCont.classList.add('hidden');
-            const sb = (id, re, c) => {
-                const map = {}; allTasks.forEach(t => { (t.match(re) || []).forEach(v => map[v] = (map[v] || 0) + 1); });
-                document.getElementById(id).innerHTML = Object.keys(map).sort().map(v => {
-                    const count = open.filter(t => t.includes(v)).length; if (count === 0 && !activeFilters.has(v)) return "";
-                    return `<div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer mb-2 ${activeFilters.has(v) ? 'text-white' : c}"><span>${v.replace('due:','').replace(/[()]/g,'')}</span><span class="text-[10px] bg-[#222] px-2 py-0.5 rounded">${count}</span></div>`;
-                }).join('');
-            };
-            sb('priorityList', /\([A-Z]\)/g, 'text-orange-400'); sb('dueList', REGEX_DUE, 'text-yellow-500'); sb('projectList', REGEX_PROJECT, 'text-blue-400'); sb('contextList', REGEX_CONTEXT, 'text-green-400');
         }
 
         async function checkForChanges() { if (isRawEditing || isSyncing || editingIndex !== null) return; try { const meta = await dbx.filesGetMetadata({ path: '/todo.txt' }); if (meta.result.rev !== lastServerTag) loadTasks(); } catch (e) {} }
