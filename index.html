@@ -6,6 +6,7 @@
     <title>DropDotTxt</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
+    <meta name="theme-color" content="#1e1e1e">
     <style>
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #121212; }
@@ -26,7 +27,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v2.9.4-stable</div>
+        <div id="statusText">v2.9.5-pwa</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -47,11 +48,12 @@
                     <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-10 py-1.5 text-xs outline-none focus:border-blue-500">
                 </div>
                 <div class="flex items-center gap-3 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
-                    <button onclick="document.getElementById('sortMenu').classList.toggle('hidden')" class="text-blue-400">Sort</button>
+                    <button onclick="downloadBackup()" class="text-blue-400">Backup</button>
+                    <button onclick="document.getElementById('sortMenu').classList.toggle('hidden')" class="text-gray-400">Sort</button>
                     <div id="sortMenu" class="hidden absolute top-full right-0 mt-2 w-40 bg-[#1e1e1e] border border-[#333] rounded-lg z-[100] dropdown-shadow p-2 normal-case">
-                        <button onclick="setSort('natural')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded text-white">Natural</button>
-                        <button onclick="setSort('priority')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded text-white">Priority</button>
-                        <button onclick="setSort('due')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded text-white">Due Date</button>
+                        <button onclick="setSort('natural')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Natural</button>
+                        <button onclick="setSort('priority')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Priority</button>
+                        <button onclick="setSort('due')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Due Date</button>
                     </div>
                     <button onclick="toggleCompletedVisibility()" class="text-purple-400 hidden sm:block">Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-400">Edit</button>
@@ -94,7 +96,25 @@
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, currentSort = 'natural', editingIndex = null;
 
+        // --- PWA LOGIC ---
+        function setupPWA() {
+            const manifest = {
+                name: "DropDotTxt", short_name: "DropDot", start_url: ".", display: "standalone",
+                background_color: "#121212", theme_color: "#1e1e1e",
+                icons: [{ src: "https://cdn-icons-png.flaticon.com/512/2098/2098402.png", sizes: "512x512", type: "image/png" }]
+            };
+            const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
+            document.head.appendChild(link);
+            if ('serviceWorker' in navigator) {
+                const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
+                const swBlob = new Blob([sw], {type: 'text/javascript'});
+                navigator.serviceWorker.register(URL.createObjectURL(swBlob));
+            }
+        }
+
         async function init() {
+            setupPWA();
             const token = localStorage.getItem('dbx_token');
             if (token) startApp(token);
             else {
@@ -119,7 +139,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "Check this link: www.google.com"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 Click text to edit"]; render(); }
         }
 
         async function saveTasks() {
@@ -142,50 +162,40 @@
         }
 
         function startEditing(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`)?.focus(), 10); }
-
-        function finishEditing(i, val) {
-            if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); }
-            editingIndex = null; render();
-        }
+        function finishEditing(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
 
         function addTask() {
-            const inp = document.getElementById('newTodo');
-            let text = inp.value.trim();
-            if (!text) return;
+            const inp = document.getElementById('newTodo'); let text = inp.value.trim(); if (!text) return;
             const today = new Date().toISOString().split('T')[0];
             const prioMatch = text.match(/^\(([A-Z])\)\s*/);
             if (prioMatch) {
-                const prio = prioMatch[0];
-                const rest = text.replace(prioMatch[0], '');
+                const prio = prioMatch[0]; const rest = text.replace(prioMatch[0], '');
                 text = `${prio}${today} ${rest}`;
-            } else {
-                text = `${today} ${text}`;
-            }
-            allTasks.push(text);
-            inp.value = "";
-            render(); saveTasks();
+            } else { text = `${today} ${text}`; }
+            allTasks.push(text); inp.value = ""; render(); saveTasks();
+        }
+
+        function downloadBackup() {
+            const blob = new Blob([allTasks.join('\n')], {type: 'text/plain'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = `todo-backup-${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
         }
 
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
-
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
             list.innerHTML = display.map(item => {
                 if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
-                
                 const isDone = item.text.startsWith('x ');
                 const isEditing = editingIndex === item.originalIndex;
-
                 let content;
                 if (isEditing) {
-                    content = `<input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" 
-                               class="flex-1 bg-[#0a0a0a] border border-blue-500 rounded px-2 py-0.5 text-sm outline-none text-white"
-                               onblur="finishEditing(${item.originalIndex}, this.value)"
-                               onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)">`;
+                    content = `<input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="flex-1 bg-[#0a0a0a] border border-blue-500 rounded px-2 py-0.5 text-sm outline-none text-white" onblur="finishEditing(${item.originalIndex}, this.value)" onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)">`;
                 } else {
                     let hText = item.text
                         .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>')
@@ -193,23 +203,18 @@
                         .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>')
                         .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
-                        // URL Link Detection - Replaces URL with "link 🔗"
                         .replace(/((https?:\/\/|www\.)[^\s]+)/g, (url) => {
                             const href = url.startsWith('www.') ? `http://${url}` : url;
                             return `<a href="${href}" target="_blank" class="inline-flex items-center gap-1 bg-[#2a2a2a] text-blue-400 px-2 py-0.5 rounded text-xs hover:bg-blue-600 hover:text-white transition-colors" onclick="event.stopPropagation()">link <span class="text-[10px]">🔗</span></a>`;
                         });
-                    
-                    content = `<div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}" 
-                               onclick="startEditing(${item.originalIndex})">${hText}</div>`;
+                    content = `<div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}" onclick="startEditing(${item.originalIndex})">${hText}</div>`;
                 }
-
                 const p = item.meta.priority;
                 const pClass = isDone ? 'border-l-gray-700 opacity-40' : (p === 'A' ? 'prio-a' : p === 'B' ? 'prio-b' : p === 'C' ? 'prio-c' : 'prio-none');
-
                 return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525]">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     ${content}
-                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
+                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
             updateSidebars();
