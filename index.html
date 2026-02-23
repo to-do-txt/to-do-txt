@@ -26,13 +26,13 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v2.9.1-stable</div>
+        <div id="statusText">v2.9.4-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 mx-4">
             <h1 class="text-2xl font-bold mb-4 text-blue-500">DropDotTxt</h1>
-            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full">Connect Dropbox</button>
+            <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white">Connect Dropbox</button>
         </div>
     </div>
 
@@ -49,9 +49,9 @@
                 <div class="flex items-center gap-3 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
                     <button onclick="document.getElementById('sortMenu').classList.toggle('hidden')" class="text-blue-400">Sort</button>
                     <div id="sortMenu" class="hidden absolute top-full right-0 mt-2 w-40 bg-[#1e1e1e] border border-[#333] rounded-lg z-[100] dropdown-shadow p-2 normal-case">
-                        <button onclick="setSort('natural')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Natural</button>
-                        <button onclick="setSort('priority')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Priority</button>
-                        <button onclick="setSort('due')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded">Due Date</button>
+                        <button onclick="setSort('natural')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded text-white">Natural</button>
+                        <button onclick="setSort('priority')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded text-white">Priority</button>
+                        <button onclick="setSort('due')" class="w-full text-left px-3 py-2 hover:bg-blue-600 rounded text-white">Due Date</button>
                     </div>
                     <button onclick="toggleCompletedVisibility()" class="text-purple-400 hidden sm:block">Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-400">Edit</button>
@@ -59,8 +59,8 @@
                 </div>
             </div>
             <div id="addBar" class="flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-3 py-2 text-sm outline-none focus:border-blue-500">
-                <button onclick="addTask()" class="bg-blue-600 px-4 md:px-6 py-2 rounded font-bold text-sm">Add</button>
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-3 py-2 text-sm outline-none focus:border-blue-500 text-white">
+                <button onclick="addTask()" class="bg-blue-600 px-4 md:px-6 py-2 rounded font-bold text-sm text-white transition-colors hover:bg-blue-500">Add</button>
             </div>
         </div>
     </header>
@@ -119,7 +119,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "(A) Click me to edit @Adam"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "Check this link: www.google.com"]; render(); }
         }
 
         async function saveTasks() {
@@ -148,6 +148,24 @@
             editingIndex = null; render();
         }
 
+        function addTask() {
+            const inp = document.getElementById('newTodo');
+            let text = inp.value.trim();
+            if (!text) return;
+            const today = new Date().toISOString().split('T')[0];
+            const prioMatch = text.match(/^\(([A-Z])\)\s*/);
+            if (prioMatch) {
+                const prio = prioMatch[0];
+                const rest = text.replace(prioMatch[0], '');
+                text = `${prio}${today} ${rest}`;
+            } else {
+                text = `${today} ${text}`;
+            }
+            allTasks.push(text);
+            inp.value = "";
+            render(); saveTasks();
+        }
+
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
@@ -165,17 +183,24 @@
                 let content;
                 if (isEditing) {
                     content = `<input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" 
-                               class="flex-1 bg-[#0a0a0a] border border-blue-500 rounded px-2 py-0.5 text-sm outline-none"
+                               class="flex-1 bg-[#0a0a0a] border border-blue-500 rounded px-2 py-0.5 text-sm outline-none text-white"
                                onblur="finishEditing(${item.originalIndex}, this.value)"
                                onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)">`;
                 } else {
-                    let highlightedText = item.text
+                    let hText = item.text
                         .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>')
                         .replace(/(\+\w+)/g, '<span class="text-blue-400 font-bold">$1</span>')
                         .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
-                        .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>');
+                        .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>')
+                        .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
+                        // URL Link Detection - Replaces URL with "link 🔗"
+                        .replace(/((https?:\/\/|www\.)[^\s]+)/g, (url) => {
+                            const href = url.startsWith('www.') ? `http://${url}` : url;
+                            return `<a href="${href}" target="_blank" class="inline-flex items-center gap-1 bg-[#2a2a2a] text-blue-400 px-2 py-0.5 rounded text-xs hover:bg-blue-600 hover:text-white transition-colors" onclick="event.stopPropagation()">link <span class="text-[10px]">🔗</span></a>`;
+                        });
+                    
                     content = `<div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}" 
-                               onclick="startEditing(${item.originalIndex})">${highlightedText}</div>`;
+                               onclick="startEditing(${item.originalIndex})">${hText}</div>`;
                 }
 
                 const p = item.meta.priority;
@@ -184,7 +209,7 @@
                 return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525]">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     ${content}
-                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
+                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             updateSidebars();
@@ -208,7 +233,6 @@
             sb('contextList', /@\w+/g, 'text-green-400');
         }
 
-        function addTask() { const inp = document.getElementById('newTodo'); if (inp.value.trim()) { allTasks.push(inp.value.trim()); inp.value = ""; render(); saveTasks(); } }
         function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
