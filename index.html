@@ -19,7 +19,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v1.9.0-stable</div>
+        <div id="statusText" class="text-gray-500">v2.0.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -46,11 +46,8 @@
             <div class="flex flex-wrap gap-2 items-center relative">
                 <input type="text" id="newTodo" autocomplete="off" oninput="handleInput(event, this)" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 min-w-[200px] bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-all">Add</button>
-                
                 <div id="activeFilters" class="flex flex-wrap gap-2"></div>
-                
-                <button id="resetBtn" onclick="resetAll()" class="hidden text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase">Reset All</button>
-
+                <button id="resetBtn" onclick="resetAll()" class="hidden text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase cursor-pointer">Reset All</button>
                 <div id="suggestions" class="suggestion-box hidden"></div>
             </div>
         </div>
@@ -108,7 +105,7 @@
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 allTasks = (await res.result.fileBlob.text()).split('\n').filter(t => t.trim() !== "");
-                setStatus('v1.9.0-stable'); render();
+                setStatus('v2.0.0-stable'); render();
             } catch (e) { allTasks = ["(A) App Connected!"]; render(); }
         }
 
@@ -116,7 +113,7 @@
             setStatus('Syncing...', 'syncing');
             try {
                 await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                setStatus('Synced'); setTimeout(() => setStatus('v1.9.0-stable'), 2000);
+                setStatus('Synced'); setTimeout(() => setStatus('v2.0.0-stable'), 2000);
             } catch (e) { setStatus('Sync Error', 'error'); }
         }
 
@@ -187,23 +184,16 @@
             const filterContainer = document.getElementById('activeFilters');
             const resetBtn = document.getElementById('resetBtn');
 
-            // Render Filter Pills
             filterContainer.innerHTML = Array.from(activeFilters).map(f => `
                 <div class="flex items-center bg-blue-900/40 text-blue-400 border border-blue-500/50 px-3 py-1 rounded text-xs font-bold gap-2">
                     <span>${f.includes('due:') ? f.replace('due:', '') : f}</span>
                     <button onclick="toggleFilter('${f}')" class="hover:text-white">✕</button>
-                </div>
-            `).join('');
+                </div>`).join('');
 
             resetBtn.className = (activeFilters.size > 0 || search) ? 'block text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase cursor-pointer' : 'hidden';
 
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex }));
-            
-            // Apply ALL active filters (AND logic)
-            activeFilters.forEach(f => {
-                display = display.filter(t => t.text.includes(f));
-            });
-            
+            activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f)); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search));
 
             list.innerHTML = display.map(item => {
@@ -220,13 +210,25 @@
                 </div>`;
             }).join('');
 
-            const ft = allTasks.join(' ');
+            // Sidebar with Open Task Counts
+            const openTasks = allTasks.filter(t => !t.startsWith('x '));
             const sidebar = (id, re, c) => {
-                const m = [...new Set(ft.match(re))].sort();
-                document.getElementById(id).innerHTML = m.map(v => `
-                    <div onclick="toggleFilter('${v}')" class="cursor-pointer ${activeFilters.has(v) ? 'text-white font-bold' : c} hover:text-white truncate transition-colors">
-                        ${v.replace('due:','')}
-                    </div>`).join('');
+                const allMatches = allTasks.join(' ').match(re) || [];
+                const uniqueMatches = [...new Set(allMatches)].sort();
+                
+                document.getElementById(id).innerHTML = uniqueMatches.map(v => {
+                    const count = openTasks.filter(t => t.includes(v)).length;
+                    if (count === 0 && !activeFilters.has(v)) return ""; // Hide empty filters unless they are active
+                    return `
+                    <div onclick="toggleFilter('${v}')" class="flex justify-between items-center cursor-pointer group mb-1">
+                        <span class="truncate transition-colors ${activeFilters.has(v) ? 'text-white font-bold' : c + ' hover:text-white'}">
+                            ${v.replace('due:','')}
+                        </span>
+                        <span class="text-[10px] bg-[#222] text-gray-500 px-1.5 py-0.5 rounded border border-[#333] group-hover:border-gray-600">
+                            ${count}
+                        </span>
+                    </div>`;
+                }).join('');
             };
             sidebar('dueList', /due:\d{4}-\d{2}-\d{2}/g, 'text-yellow-500');
             sidebar('projectList', /\+\w+/g, 'text-blue-400');
