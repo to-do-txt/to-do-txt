@@ -29,8 +29,8 @@
     <div id="status" class="fixed bottom-2 right-4 text-[9px] font-mono z-50 flex items-center gap-3 bg-[#0a0a0a]/90 px-3 py-1.5 rounded-full border border-[#333]">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
         <div id="statusText" class="flex gap-3 items-center">
-            <span class="text-gray-400">v3.4.1</span>
-            <span class="text-gray-600 border-l border-gray-800 pl-3">Build: Feb 23, 08:31 AM</span>
+            <span class="text-gray-400">v3.4.2</span>
+            <span class="text-gray-600 border-l border-gray-800 pl-3">Build: Feb 23, 08:35 AM</span>
         </div>
     </div>
 
@@ -56,6 +56,11 @@
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
             </div>
+            
+            <div class="flex gap-2">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="flex-1 bg-[#0a0a0a] border border-[#333] rounded px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
+            </div>
+
             <div id="addBar" class="flex gap-2">
                 <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none text-white">
                 <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
@@ -92,12 +97,12 @@
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        const APP_VERSION = "v3.4.1";
-        const BUILD_TIME = "Feb 23, 08:31 AM";
+        const APP_VERSION = "v3.4.2";
+        const BUILD_TIME = "Feb 23, 08:35 AM";
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, 
-            editingIndex = null, showPastDueOnly = false, currentRev = null, viewMode = 'list', boardAxis = 'project';
+            editingIndex = null, currentRev = null, viewMode = 'list', boardAxis = 'project';
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -157,14 +162,11 @@
 
         function getTaskMeta(text) {
             const p = text.match(/^\(([A-Z])\)/), d = text.match(/due:(\d{4}-\d{2}-\d{2})/), pr = text.match(/\+\w+/), ctx = text.match(/@\w+/);
-            const today = new Date().toISOString().split('T')[0];
             return { 
                 priority: p ? p[1] : 'Z', 
-                due: d ? d[1] : '9999-12-31', 
                 project: pr ? pr[0] : null, 
                 context: ctx ? ctx[0] : null,
-                isHeader: text.startsWith('#'), 
-                isPastDue: (d && d[1] < today && !text.startsWith('x ')) 
+                isHeader: text.startsWith('#')
             };
         }
 
@@ -196,8 +198,7 @@
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
 
             if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
-            if (!showCompleted || showPastDueOnly) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
-            if (showPastDueOnly) display = display.filter(t => t.meta.isPastDue || t.meta.isHeader);
+            if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
             
@@ -208,15 +209,17 @@
         }
 
         function renderBoard() {
-            const board = document.getElementById('kanbanBoard');
+            const board = document.getElementById('kanbanBoard'), search = (document.getElementById('searchInput')?.value || "").toLowerCase();
             const axis = boardAxis; 
             const tags = [...new Set(allTasks.map(t => getTaskMeta(t)[axis]).filter(x => x !== null))].sort();
-            tags.push(null); // The "Inbox" column
+            tags.push(null); 
 
             board.innerHTML = tags.map(tag => {
                 const tasks = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }))
                                       .filter(t => !t.meta.isHeader && (!showCompleted ? !t.text.startsWith('x ') : true))
-                                      .filter(t => t.meta[axis] === tag);
+                                      .filter(t => t.meta[axis] === tag)
+                                      .filter(t => search ? t.text.toLowerCase().includes(search) : true);
+                
                 if (tasks.length === 0 && tag !== null) return ""; 
 
                 return `
@@ -282,7 +285,7 @@
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('viewContainer').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function resetAll() { activeFilters.clear(); viewMode = 'list'; render(); }
+        function resetAll() { activeFilters.clear(); viewMode = 'list'; document.getElementById('searchInput').value = ""; render(); }
 
         init();
     </script>
