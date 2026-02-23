@@ -28,7 +28,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v2.9.9-pwa-final</div>
+        <div id="statusText">v3.0.0</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -51,7 +51,7 @@
                 </div>
                 <div class="flex items-center gap-4 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
                     <button onclick="downloadBackup()" class="text-blue-400 hover:text-blue-300">Backup</button>
-                    <button onclick="toggleCompletedVisibility()" class="text-purple-400">Archive</button>
+                    <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-400">Raw</button>
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
@@ -75,6 +75,7 @@
 
         <main class="flex-1 p-4 md:p-6 overflow-y-auto w-full">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
+            
             <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
                 <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none leading-relaxed resize-none"></textarea>
                 <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest">Save Changes</button>
@@ -137,7 +138,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 New Install Setup Done!"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 Click text to edit"]; render(); }
         }
 
         async function saveTasks() {
@@ -180,9 +181,17 @@
             a.click();
         }
 
+        function toggleCompletedVisibility() {
+            showCompleted = !showCompleted;
+            const btn = document.getElementById('doneToggle');
+            btn.innerText = showCompleted ? "Hide Done" : "Show Done";
+            render();
+        }
+
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
+            
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
@@ -239,7 +248,6 @@
         function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
-        function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
