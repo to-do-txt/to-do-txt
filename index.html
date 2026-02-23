@@ -30,7 +30,8 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.1.5</div>
+        <div id="statusText">v3.1.6</div>
+        <div id="lastSync" class="border-l border-gray-800 pl-2">Syncing...</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -91,14 +92,14 @@
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null;
-        let lastServerTag = null; // Store the last file version tag
+        let lastServerTag = null;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
             if (token) {
                 startApp(token);
                 window.addEventListener('focus', checkForChanges);
-                setInterval(checkForChanges, 30000); // Check every 30 seconds
+                setInterval(checkForChanges, 30000);
             } else {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('code')) {
@@ -111,11 +112,16 @@
             }
         }
 
+        function updateSyncTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            document.getElementById('lastSync').innerText = `Synced ${timeStr}`;
+        }
+
         function doLogin() { dbxAuth.getAuthenticationUrl(REDIRECT_URI, null, 'code', 'offline', null, 'none', true).then(u => { localStorage.setItem('dbx_verifier', dbxAuth.getCodeVerifier()); window.location.href = u; }); }
         function doLogout() { localStorage.clear(); window.location.href = REDIRECT_URI; }
         function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
 
-        // NEW: Check if Dropbox has a newer version without downloading full content yet
         async function checkForChanges() {
             if (isRawEditing || editingIndex !== null) return;
             try {
@@ -131,14 +137,14 @@
             const btn = document.getElementById('syncBtn');
             const indicator = document.getElementById('syncIndicator');
             if(btn) { btn.innerText = "Syncing..."; btn.classList.add('syncing'); }
-            
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
-                lastServerTag = res.result.rev; // Save version tag
+                lastServerTag = res.result.rev;
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
                 indicator.className = "w-2 h-2 rounded-full bg-green-500";
+                updateSyncTime();
             } catch (e) { 
                 indicator.className = "w-2 h-2 rounded-full bg-red-500";
             } finally {
@@ -150,8 +156,9 @@
             const indicator = document.getElementById('syncIndicator');
             try { 
                 const res = await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); 
-                lastServerTag = res.result.rev; // Update tag after saving
+                lastServerTag = res.result.rev;
                 indicator.className = "w-2 h-2 rounded-full bg-green-500";
+                updateSyncTime();
             } catch (e) { 
                 indicator.className = "w-2 h-2 rounded-full bg-red-500";
             }
