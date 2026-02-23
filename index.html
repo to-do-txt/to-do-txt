@@ -28,7 +28,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.1.1</div>
+        <div id="statusText">v3.1.2</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -46,9 +46,6 @@
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
                     <div class="font-bold text-lg md:text-xl text-blue-500 cursor-pointer tracking-tighter" onclick="resetAll()">to-do-txt</div>
                 </div>
-                <div class="hidden lg:flex flex-1 mx-6">
-                    <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-10 py-1.5 text-xs outline-none focus:border-blue-500">
-                </div>
                 <div class="flex items-center gap-4 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
                     <button onclick="downloadBackup()" class="text-blue-400 hover:text-blue-300">Backup</button>
                     <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
@@ -56,6 +53,11 @@
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
             </div>
+
+            <div class="flex w-full">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
+            </div>
+
             <div id="addBar" class="flex gap-2">
                 <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white">
                 <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
@@ -203,7 +205,7 @@
                         .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>')
                         .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
-                        // Fixed "link:" logic
+                        // Updated link: keyword logic
                         .replace(/link:((https?:\/\/|www\.)[^\s]+)/g, (match, url) => {
                             const href = url.startsWith('www.') ? `http://${url}` : url;
                             return `<a href="${href}" target="_blank" class="text-blue-500 underline hover:text-blue-400 inline-flex items-center gap-1 font-bold" onclick="event.stopPropagation()">link <span class="text-[10px]">↗️</span></a>`;
