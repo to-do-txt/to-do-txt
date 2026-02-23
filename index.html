@@ -15,11 +15,7 @@
         .prio-b { border-color: #facc15 !important; }
         .prio-c { border-color: #4ade80 !important; }
         .prio-none { border-color: #3b82f6 !important; }
-        
-        /* Mobile Drawer Transition */
-        #sidebar {
-            transition: transform 0.3s ease-in-out;
-        }
+        #sidebar { transition: transform 0.3s ease-in-out; }
         @media (max-width: 768px) {
             #sidebar.closed { transform: translateX(-100%); }
             #sidebar.open { transform: translateX(0); }
@@ -28,9 +24,9 @@
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
-    <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
+    <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500 text-[8px] md:text-[10px]">v2.9.0-stable</div>
+        <div id="statusText">v2.9.1-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -47,11 +43,9 @@
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
                     <div class="font-bold text-lg md:text-xl text-blue-500 cursor-pointer" onclick="resetAll()">DropDotTxt</div>
                 </div>
-                
-                <div class="hidden lg:flex flex-1 mx-6 relative">
+                <div class="hidden lg:flex flex-1 mx-6">
                     <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-10 py-1.5 text-xs outline-none focus:border-blue-500">
                 </div>
-
                 <div class="flex items-center gap-3 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
                     <button onclick="document.getElementById('sortMenu').classList.toggle('hidden')" class="text-blue-400">Sort</button>
                     <div id="sortMenu" class="hidden absolute top-full right-0 mt-2 w-40 bg-[#1e1e1e] border border-[#333] rounded-lg z-[100] dropdown-shadow p-2 normal-case">
@@ -61,13 +55,9 @@
                     </div>
                     <button onclick="toggleCompletedVisibility()" class="text-purple-400 hidden sm:block">Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-400">Edit</button>
+                    <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
             </div>
-            
-            <div class="lg:hidden relative">
-                <input type="text" id="mobileSearch" oninput="syncSearch(this.value)" placeholder="Search..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-8 py-2 text-xs outline-none">
-            </div>
-
             <div id="addBar" class="flex gap-2">
                 <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-3 py-2 text-sm outline-none focus:border-blue-500">
                 <button onclick="addTask()" class="bg-blue-600 px-4 md:px-6 py-2 rounded font-bold text-sm">Add</button>
@@ -102,30 +92,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, currentSort = 'natural', sortAsc = false;
-
-        function toggleSidebar() {
-            const sb = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            if (sb.classList.contains('closed')) {
-                sb.classList.replace('closed', 'open');
-                overlay.classList.remove('hidden');
-            } else {
-                sb.classList.replace('open', 'closed');
-                overlay.classList.add('hidden');
-            }
-        }
-
-        function syncSearch(val) {
-            document.getElementById('searchInput').value = val;
-            render();
-        }
-
-        // Logic functions (Same as v2.8.2)
-        function setStatus(msg, type = 'idle') {
-            document.getElementById('statusText').innerText = msg;
-            document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${type === 'error' ? 'bg-red-500' : type === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`;
-        }
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, currentSort = 'natural', editingIndex = null;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -147,19 +114,17 @@
         function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
 
         async function loadTasks() {
-            setStatus('Loading...', 'syncing');
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
-                setStatus('v2.9.0-stable'); render();
-            } catch (e) { allTasks = ["# Welcome", "(A) Orange Task @Adam", "(B) Yellow Task +Project", "Normal Task"]; render(); }
+                render();
+            } catch (e) { allTasks = ["# Welcome", "(A) Click me to edit @Adam"]; render(); }
         }
 
         async function saveTasks() {
-            setStatus('Syncing...', 'syncing');
-            try { await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); setStatus('Synced'); } 
-            catch (e) { setStatus('Sync Error', 'error'); }
+            try { await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); } 
+            catch (e) { console.error(e); }
         }
 
         function getTaskMeta(text) {
@@ -171,14 +136,16 @@
 
         function toggleTask(i) {
             const today = new Date().toISOString().split('T')[0];
-            let task = allTasks[i];
             const doneRegex = /^x \d{4}-\d{2}-\d{2} /;
-            if (doneRegex.test(task)) {
-                allTasks[i] = task.replace(doneRegex, '');
-            } else {
-                allTasks[i] = `x ${today} ${task}`;
-            }
+            allTasks[i] = doneRegex.test(allTasks[i]) ? allTasks[i].replace(doneRegex, '') : `x ${today} ${allTasks[i]}`;
             render(); saveTasks();
+        }
+
+        function startEditing(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`)?.focus(), 10); }
+
+        function finishEditing(i, val) {
+            if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); }
+            editingIndex = null; render();
         }
 
         function render() {
@@ -189,33 +156,35 @@
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
-            if (currentSort !== 'natural') {
-                display.sort((a, b) => {
-                    if (a.meta.isHeader || b.meta.isHeader) return (a.meta.isHeader && b.meta.isHeader) ? a.originalIndex - b.originalIndex : (a.meta.isHeader ? -1 : 1);
-                    let comp = a.meta[currentSort].localeCompare(b.meta[currentSort]);
-                    return comp === 0 ? a.originalIndex - b.originalIndex : (sortAsc ? comp : -comp);
-                });
-            } else {
-                display.sort((a, b) => a.originalIndex - b.originalIndex);
-            }
-
             list.innerHTML = display.map(item => {
-                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-[0.2em]">${item.text.replace(/#+\s+/, '')}</div>`;
+                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
                 
                 const isDone = item.text.startsWith('x ');
-                let highlightedText = item.text
-                    .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>')
-                    .replace(/(\+\w+)/g, '<span class="text-blue-400 font-bold">$1</span>')
-                    .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
-                    .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>');
+                const isEditing = editingIndex === item.originalIndex;
+
+                let content;
+                if (isEditing) {
+                    content = `<input id="edit-${item.originalIndex}" type="text" value="${item.text.replace(/"/g, '&quot;')}" 
+                               class="flex-1 bg-[#0a0a0a] border border-blue-500 rounded px-2 py-0.5 text-sm outline-none"
+                               onblur="finishEditing(${item.originalIndex}, this.value)"
+                               onkeypress="if(event.key==='Enter') finishEditing(${item.originalIndex}, this.value)">`;
+                } else {
+                    let highlightedText = item.text
+                        .replace(/(\([A-Z]\))/g, '<span class="text-orange-400 font-bold">$1</span>')
+                        .replace(/(\+\w+)/g, '<span class="text-blue-400 font-bold">$1</span>')
+                        .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
+                        .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>');
+                    content = `<div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}" 
+                               onclick="startEditing(${item.originalIndex})">${highlightedText}</div>`;
+                }
 
                 const p = item.meta.priority;
                 const pClass = isDone ? 'border-l-gray-700 opacity-40' : (p === 'A' ? 'prio-a' : p === 'B' ? 'prio-b' : p === 'C' ? 'prio-c' : 'prio-none');
 
-                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525] transition-colors">
+                return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} mb-1 p-3 hover:bg-[#252525]">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
-                    <div class="flex-1 text-sm ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}">${highlightedText}</div>
-                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-all">✕</button>
+                    ${content}
+                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
             updateSidebars();
@@ -242,12 +211,12 @@
         function addTask() { const inp = document.getElementById('newTodo'); if (inp.value.trim()) { allTasks.push(inp.value.trim()); inp.value = ""; render(); saveTasks(); } }
         function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
-        function setSort(s) { currentSort = s; document.getElementById('currentSortLabel').innerText = s; document.getElementById('sortMenu').classList.add('hidden'); render(); }
-        function toggleCompletedVisibility() { showCompleted = !showCompleted; document.getElementById('visibleText').innerText = showCompleted ? "Show" : "Hide"; render(); }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
+        function setSort(s) { currentSort = s; document.getElementById('sortMenu').classList.add('hidden'); render(); }
+        function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; document.getElementById('mobileSearch').value = ""; render(); }
-
+        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         init();
     </script>
 </body>
