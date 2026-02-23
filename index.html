@@ -28,7 +28,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.1.2</div>
+        <div id="statusText">v3.1.3</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -48,6 +48,7 @@
                 </div>
                 <div class="flex items-center gap-4 relative text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
                     <button onclick="downloadBackup()" class="text-blue-400 hover:text-blue-300">Backup</button>
+                    <button onclick="toggleHeaderVisibility()" id="headerToggle" class="text-green-400">Hide Headers</button>
                     <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-400">Hide Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-400">Raw</button>
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
@@ -88,7 +89,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, editingIndex = null;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null;
 
         function setupPWA() {
             const manifest = {
@@ -134,7 +135,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 App Initialized"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-23 App Initialized"]; render(); }
         }
 
         async function saveTasks() {
@@ -146,7 +147,9 @@
             const p = text.match(/^\(([A-Z])\)/);
             const d = text.match(/due:(\d{4}-\d{2}-\d{2})/);
             const pr = text.match(/\+(\w+)/);
-            return { priority: p ? p[1] : 'Z', due: d ? d[1] : '9999-12-31', project: pr ? pr[1] : 'ZZZ', isHeader: text.startsWith('#') };
+            // Detect headers starting with # or --
+            const isHeader = text.startsWith('#') || text.startsWith('--');
+            return { priority: p ? p[1] : 'Z', due: d ? d[1] : '9999-12-31', project: pr ? pr[1] : 'ZZZ', isHeader: isHeader };
         }
 
         function toggleTask(i) {
@@ -183,16 +186,26 @@
             render();
         }
 
+        function toggleHeaderVisibility() {
+            showHeaders = !showHeaders;
+            document.getElementById('headerToggle').innerText = showHeaders ? "Hide Headers" : "Show Headers";
+            render();
+        }
+
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
             
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
+
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
             list.innerHTML = display.map(item => {
-                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/#+\s+/, '')}</div>`;
+                if (item.meta.isHeader) {
+                    return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
+                }
                 const isDone = item.text.startsWith('x ');
                 const isEditing = editingIndex === item.originalIndex;
                 let content;
@@ -205,7 +218,6 @@
                         .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>')
                         .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
-                        // Updated link: keyword logic
                         .replace(/link:((https?:\/\/|www\.)[^\s]+)/g, (match, url) => {
                             const href = url.startsWith('www.') ? `http://${url}` : url;
                             return `<a href="${href}" target="_blank" class="text-blue-500 underline hover:text-blue-400 inline-flex items-center gap-1 font-bold" onclick="event.stopPropagation()">link <span class="text-[10px]">↗️</span></a>`;
@@ -224,7 +236,8 @@
         }
 
         function updateSidebars() {
-            const open = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#'));
+            // Numbers now only count open tasks that are NOT headers
+            const open = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#') && !t.startsWith('--'));
             const sb = (id, re, c) => {
                 const items = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = items.map(v => {
