@@ -17,11 +17,9 @@
         .prio-none { border-left-color: #3b82f6 !important; }
         #sidebar { transition: transform 0.3s ease-in-out; }
         @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
-        
-        /* Smooth Action Buttons */
         .task-row .task-actions { opacity: 0; transition: opacity 0.15s ease-in-out; }
         .task-row:hover .task-actions { opacity: 1; }
-        @media (max-width: 768px) { .task-actions { opacity: 0.6 !important; } }
+        @media (max-width: 768px) { .task-actions { opacity: 1; } }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
@@ -29,8 +27,8 @@
     <div id="status" class="fixed bottom-2 right-4 text-[9px] font-mono z-50 flex items-center gap-3 bg-[#0a0a0a]/90 px-3 py-1.5 rounded-full border border-[#333]">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
         <div id="statusText" class="flex gap-3 items-center text-gray-400">
-            <span>v3.4.5</span>
-            <span class="border-l border-gray-800 pl-3">Feb 23, 08:58 AM</span>
+            <span>v3.4.6</span>
+            <span class="border-l border-gray-800 pl-3 text-blue-500 font-bold">CORE RESTORED</span>
         </div>
     </div>
 
@@ -42,24 +40,24 @@
                     <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetAll()">to-do-txt</div>
                 </div>
                 <div class="flex gap-4 text-[10px] font-bold uppercase text-gray-500">
-                    <button onclick="toggleViewMode()" class="hover:text-blue-400 transition">Board View</button>
-                    <button onclick="toggleRawEdit()" class="hover:text-orange-400 transition">Raw Edit</button>
-                    <button onclick="doLogout()" class="hover:text-red-400 transition">Logout</button>
+                    <button onclick="toggleCompletedVisibility()" id="toggleDoneBtn" class="hover:text-purple-400">Hide Done</button>
+                    <button onclick="toggleViewMode()" class="hover:text-blue-400">View</button>
+                    <button onclick="toggleRawEdit()" class="hover:text-orange-400">Raw</button>
                 </div>
             </div>
             
-            <input type="text" id="searchInput" oninput="render()" placeholder="Quick filter..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white transition-all">
+            <input type="text" id="searchInput" oninput="render()" placeholder="Filter..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
             
             <div class="flex gap-2">
-                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="What needs doing?" class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 placeholder-gray-600">
-                <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500 transition-colors">Add</button>
+                <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
+                <button id="addBtn" onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm hover:bg-blue-500">Add</button>
             </div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-6 z-50 border-r border-[#333] md:relative md:translate-x-0 md:block overflow-y-auto">
-            <div id="dashboardMetrics" class="mb-8 text-sm"></div>
+            <div id="dashboardMetrics" class="mb-8 space-y-2"></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1"></div></div>
             <div><h2 class="text-[10px] font-black text-gray-600 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1"></div></div>
@@ -68,20 +66,18 @@
         <main class="flex-1 overflow-y-auto p-4 md:p-8">
             <div id="todoList" class="max-w-4xl mx-auto space-y-1"></div>
             <div id="kanbanBoard" class="hidden flex gap-4 h-full items-start overflow-x-auto pb-10"></div>
-            
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none resize-none"></textarea>
-                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 py-3 rounded text-xs font-bold uppercase tracking-widest">Apply Changes</button>
+                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none"></textarea>
+                <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 py-3 rounded text-xs font-bold uppercase">Update File</button>
             </div>
         </main>
     </div>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        const APP_VERSION = "v3.4.5";
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, viewMode = 'list', currentRev = null;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, viewMode = 'list', currentRev = null, showCompleted = true, filterPastDue = false;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -94,7 +90,7 @@
                     const resp = await dbxAuth.getAccessTokenFromCode(REDIRECT_URI, urlParams.get('code'));
                     localStorage.setItem('dbx_token', resp.result.access_token);
                     window.location.href = REDIRECT_URI;
-                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold hover:bg-blue-500 transition">Connect Dropbox</button></div>`;
+                } else document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="doLogin()" class="bg-blue-600 text-white px-8 py-3 rounded font-bold">Connect Dropbox</button></div>`;
             }
         }
 
@@ -131,15 +127,23 @@
         }
 
         function updateSyncStatus(status) {
-            const ind = document.getElementById('syncIndicator'), txt = document.getElementById('statusText');
+            const ind = document.getElementById('syncIndicator');
             if (status === 'synced') ind.className = "w-2 h-2 rounded-full bg-green-500";
             else if (status === 'outdated') ind.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse";
             else ind.className = "w-2 h-2 rounded-full bg-blue-500 animate-bounce";
         }
 
         function getTaskMeta(text) {
-            const p = text.match(/^\(([A-Z])\)/), pr = text.match(/\+\w+/), ctx = text.match(/@\w+/);
-            return { priority: p ? p[1] : 'Z', project: pr ? pr[0] : null, context: ctx ? ctx[0] : null, isDone: text.startsWith('x ') };
+            const today = new Date().toISOString().split('T')[0];
+            const p = text.match(/^\(([A-Z])\)/);
+            const dueMatch = text.match(/due:(\d{4}-\d{2}-\d{2})/);
+            return { 
+                priority: p ? p[1] : 'Z', 
+                project: (text.match(/\+\w+/g) || [])[0], 
+                isDone: text.startsWith('x '),
+                isHeader: text.startsWith('#'),
+                isPastDue: dueMatch && dueMatch[1] < today && !text.startsWith('x ')
+            };
         }
 
         function render() {
@@ -151,17 +155,27 @@
             const list = document.getElementById('todoList'), search = (document.getElementById('searchInput')?.value || "").toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
 
-            activeFilters.forEach(f => display = display.filter(t => t.text.includes(f)));
-            if (search) display = display.filter(t => t.text.toLowerCase().includes(search));
+            if (!showCompleted) display = display.filter(t => !t.meta.isDone || t.meta.isHeader);
+            if (filterPastDue) display = display.filter(t => t.meta.isPastDue || t.meta.isHeader);
+            activeFilters.forEach(f => display = display.filter(t => t.text.includes(f) || t.meta.isHeader));
+            if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
             
             list.innerHTML = display.map(item => {
+                if (item.meta.isHeader) {
+                    const level = (item.text.match(/^#+/) || ["#"])[0].length;
+                    const size = level === 1 ? 'text-lg' : 'text-sm';
+                    return `<div class="pt-6 pb-2 border-b border-[#333] mb-2 text-blue-500 font-black uppercase tracking-widest ${size}">${item.text.replace(/^#+\s*/, '')}</div>`;
+                }
                 const pClass = item.meta.isDone ? 'opacity-40' : (item.meta.priority === 'A' ? 'prio-a' : item.meta.priority === 'B' ? 'prio-b' : 'prio-none');
-                const content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>').replace(/(@\w+)/g, '<span class="text-green-400">$1</span>');
-                return `<div class="task-row group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#252525] transition-colors">
+                const content = item.text.replace(/(\+\w+)/g, '<span class="text-blue-400">$1</span>')
+                                         .replace(/(@\w+)/g, '<span class="text-green-400">$1</span>')
+                                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, m => `<span class="${item.meta.isPastDue ? 'text-red-500 font-bold underline' : 'text-yellow-500'}">${m}</span>`);
+                
+                return `<div class="task-row group flex items-center bg-[#1e1e1e] border-l-4 ${pClass} p-3 mb-1 rounded-r hover:bg-[#252525]">
                     <input type="checkbox" ${item.meta.isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-3 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-sm ${item.meta.isDone ? 'line-through text-gray-500 italic' : ''}" ondblclick="editTaskText(${item.originalIndex})">${content}</div>
-                    <div class="task-actions flex items-center gap-2 pl-4">
-                        <button onclick="deleteTask(${item.originalIndex})" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all" title="Delete Task">✕</button>
+                    <div class="task-actions flex items-center pl-4">
+                        <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 p-2">✕</button>
                     </div>
                 </div>`;
             }).join('');
@@ -169,15 +183,15 @@
 
         function renderBoard() {
             const board = document.getElementById('kanbanBoard');
-            const tags = [...new Set(allTasks.map(t => getTaskMeta(t).project).filter(x => x !== null))].sort();
+            const tags = [...new Set(allTasks.map(t => getTaskMeta(t).project).filter(x => x))].sort();
             tags.push(null);
             board.innerHTML = tags.map(tag => {
                 const tasks = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }))
-                    .filter(t => t.meta.project === tag);
+                    .filter(t => t.meta.project === tag && !t.meta.isHeader);
                 if (tasks.length === 0 && tag !== null) return "";
                 return `<div class="bg-[#1a1a1a] p-3 rounded-lg border border-[#333] min-w-[280px]">
                     <div class="text-[10px] font-black text-blue-500 uppercase mb-4 tracking-widest">${tag || 'Inbox'}</div>
-                    ${tasks.map(t => `<div class="bg-[#222] p-2 rounded mb-2 text-xs border-l-2 border-blue-500/30">${t.text}</div>`).join('')}
+                    ${tasks.map(t => `<div class="bg-[#222] p-2 rounded mb-2 text-xs">${t.text}</div>`).join('')}
                 </div>`;
             }).join('');
         }
@@ -189,18 +203,12 @@
         }
 
         function deleteTask(i) {
-            if (confirm("Delete this task?")) {
-                allTasks.splice(i, 1);
-                render(); saveTasks();
-            }
+            if (confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); }
         }
 
         function editTaskText(i) {
-            const newVal = prompt("Edit task:", allTasks[i]);
-            if (newVal !== null && newVal.trim() !== "") {
-                allTasks[i] = newVal.trim();
-                render(); saveTasks();
-            }
+            const newVal = prompt("Edit:", allTasks[i]);
+            if (newVal) { allTasks[i] = newVal.trim(); render(); saveTasks(); }
         }
 
         function addTask() {
@@ -211,8 +219,15 @@
         }
 
         function updateSidebars() {
-            const openT = allTasks.filter(t => !t.startsWith('x '));
-            document.getElementById('dashboardMetrics').innerHTML = `<div class="text-blue-400 font-bold mb-2">Open: ${openT.length}</div>`;
+            const openT = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#'));
+            const pastDueCount = allTasks.filter(t => getTaskMeta(t).isPastDue).length;
+            
+            let metricsHTML = `<div class="text-blue-400 font-bold text-sm">Open: ${openT.length}</div>`;
+            if (pastDueCount > 0) {
+                metricsHTML += `<div onclick="togglePastDue()" class="cursor-pointer text-xs p-2 rounded ${filterPastDue ? 'bg-red-600 text-white font-bold' : 'bg-red-900/20 text-red-400 hover:bg-red-900/40'} transition">⚠️ ${pastDueCount} Past Due</div>`;
+            }
+            document.getElementById('dashboardMetrics').innerHTML = metricsHTML;
+
             const sb = (id, re, c) => {
                 const items = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = items.map(v => {
@@ -224,11 +239,13 @@
         }
 
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
+        function togglePastDue() { filterPastDue = !filterPastDue; render(); }
+        function toggleCompletedVisibility() { showCompleted = !showCompleted; document.getElementById('toggleDoneBtn').innerText = showCompleted ? "Hide Done" : "Show Done"; render(); }
         function toggleViewMode() { viewMode = viewMode === 'list' ? 'board' : 'list'; document.getElementById('todoList').classList.toggle('hidden', viewMode === 'board'); document.getElementById('kanbanBoard').classList.toggle('hidden', viewMode === 'list'); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').parentElement.classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; viewMode = 'list'; render(); }
+        function resetAll() { activeFilters.clear(); filterPastDue = false; document.getElementById('searchInput').value = ""; viewMode = 'list'; render(); }
 
         init();
     </script>
