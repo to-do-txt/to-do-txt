@@ -22,11 +22,7 @@
             #sidebar.closed { transform: translateX(-100%); }
             #sidebar.open { transform: translateX(0); }
         }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.3; }
-            100% { opacity: 1; }
-        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
         .syncing { animation: pulse 1s infinite; }
     </style>
 </head>
@@ -34,7 +30,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.1.4</div>
+        <div id="statusText">v3.1.5</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -63,11 +59,9 @@
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
             </div>
-
             <div class="flex w-full">
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
             </div>
-
             <div id="addBar" class="flex gap-2">
                 <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white">
                 <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
@@ -82,9 +76,7 @@
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-blue-500/50">Projects</h2><div id="projectList" class="space-y-1 text-sm"></div></div>
             <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-green-500/50">Contexts</h2><div id="contextList" class="space-y-1 text-sm"></div></div>
         </aside>
-
         <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/50 z-40 md:hidden"></div>
-
         <main class="flex-1 p-4 md:p-6 overflow-y-auto w-full">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
             <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
@@ -99,30 +91,15 @@
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null;
-
-        function setupPWA() {
-            const manifest = {
-                name: "to-do-txt",
-                short_name: "to-do-txt",
-                start_url: ".",
-                display: "standalone",
-                background_color: "#121212",
-                theme_color: "#1e1e1e"
-            };
-            const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-            const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
-            document.head.appendChild(link);
-        }
+        let lastServerTag = null; // Store the last file version tag
 
         async function init() {
-            setupPWA();
             const token = localStorage.getItem('dbx_token');
             if (token) {
                 startApp(token);
-                // Auto-sync when user returns to tab
-                window.addEventListener('focus', () => { if (!isRawEditing) loadTasks(); });
-            }
-            else {
+                window.addEventListener('focus', checkForChanges);
+                setInterval(checkForChanges, 30000); // Check every 30 seconds
+            } else {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('code')) {
                     const verifier = localStorage.getItem('dbx_verifier');
@@ -138,6 +115,18 @@
         function doLogout() { localStorage.clear(); window.location.href = REDIRECT_URI; }
         function startApp(token) { dbx = new Dropbox.Dropbox({ accessToken: token }); loadTasks(); }
 
+        // NEW: Check if Dropbox has a newer version without downloading full content yet
+        async function checkForChanges() {
+            if (isRawEditing || editingIndex !== null) return;
+            try {
+                const meta = await dbx.filesGetMetadata({ path: '/todo.txt' });
+                if (meta.result.rev !== lastServerTag) {
+                    document.getElementById('syncIndicator').className = "w-2 h-2 rounded-full bg-orange-500 syncing";
+                    loadTasks();
+                }
+            } catch (e) { console.error("Poll failed", e); }
+        }
+
         async function loadTasks() {
             const btn = document.getElementById('syncBtn');
             const indicator = document.getElementById('syncIndicator');
@@ -145,13 +134,13 @@
             
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
+                lastServerTag = res.result.rev; // Save version tag
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-                if(indicator) indicator.className = "w-2 h-2 rounded-full bg-green-500";
+                indicator.className = "w-2 h-2 rounded-full bg-green-500";
             } catch (e) { 
-                console.error(e);
-                if(indicator) indicator.className = "w-2 h-2 rounded-full bg-red-500";
+                indicator.className = "w-2 h-2 rounded-full bg-red-500";
             } finally {
                 if(btn) { btn.innerText = "Sync"; btn.classList.remove('syncing'); }
             }
@@ -160,12 +149,11 @@
         async function saveTasks() {
             const indicator = document.getElementById('syncIndicator');
             try { 
-                await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); 
-                if(indicator) indicator.className = "w-2 h-2 rounded-full bg-green-500";
-            } 
-            catch (e) { 
-                console.error(e);
-                if(indicator) indicator.className = "w-2 h-2 rounded-full bg-red-500";
+                const res = await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); 
+                lastServerTag = res.result.rev; // Update tag after saving
+                indicator.className = "w-2 h-2 rounded-full bg-green-500";
+            } catch (e) { 
+                indicator.className = "w-2 h-2 rounded-full bg-red-500";
             }
         }
 
@@ -220,17 +208,13 @@
         function render() {
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
-            
             if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
-
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
             list.innerHTML = display.map(item => {
-                if (item.meta.isHeader) {
-                    return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
-                }
+                if (item.meta.isHeader) return `<div class="pt-8 pb-2 border-b border-[#333] mb-4 text-blue-500 font-black uppercase text-[10px] tracking-widest">${item.text.replace(/^[#\-\s]*/, '').trim()}</div>`;
                 const isDone = item.text.startsWith('x ');
                 const isEditing = editingIndex === item.originalIndex;
                 let content;
