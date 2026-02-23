@@ -13,14 +13,13 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #121212; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-        #rawEditor { scrollbar-gutter: stable; }
     </style>
 </head>
 <body class="bg-[#121212] text-gray-200 font-sans h-screen flex flex-col overflow-hidden">
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText" class="text-gray-500">v2.1.0-stable</div>
+        <div id="statusText" class="text-gray-500">v2.3.0-stable</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -46,10 +45,10 @@
             </div>
 
             <div id="addBar" class="flex flex-wrap gap-2 items-center relative">
-                <input type="text" id="newTodo" autocomplete="off" oninput="handleInput(event, this)" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add new task..." class="flex-1 min-w-[200px] bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
+                <input type="text" id="newTodo" autocomplete="off" oninput="handleInput(event, this)" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task or # Header..." class="flex-1 min-w-[200px] bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 outline-none focus:border-blue-500 text-sm">
                 <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold text-sm transition-all">Add</button>
                 <div id="activeFilters" class="flex flex-wrap gap-2"></div>
-                <button id="resetBtn" onclick="resetAll()" class="hidden text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase">Reset All</button>
+                <button id="resetBtn" onclick="resetAll()" class="hidden text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded font-bold uppercase">Reset All</button>
                 <div id="suggestions" class="suggestion-box hidden"></div>
             </div>
         </div>
@@ -67,7 +66,6 @@
 
         <main class="flex-1 p-6 overflow-y-auto relative flex flex-col">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
-            
             <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-[10px] text-gray-500 font-mono uppercase">Raw todo.txt editor</span>
@@ -75,7 +73,6 @@
                 </div>
                 <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none focus:border-orange-500/50 leading-relaxed resize-none"></textarea>
             </div>
-
             <div id="inlineSuggestions" class="suggestion-box hidden"></div>
         </main>
     </div>
@@ -84,7 +81,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), suggestionTarget = null, isRawEditing = false;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false;
 
         function setStatus(msg, type = 'idle') {
             document.getElementById('statusText').innerText = msg;
@@ -116,141 +113,101 @@
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 allTasks = (await res.result.fileBlob.text()).split('\n').filter(t => t.trim() !== "");
-                setStatus('v2.1.0-stable'); render();
-            } catch (e) { allTasks = ["(A) App Connected!"]; render(); }
+                setStatus('v2.3.0-stable'); render();
+            } catch (e) { allTasks = ["# Getting Started", "(A) App Connected!"]; render(); }
         }
 
         async function saveTasks() {
             setStatus('Syncing...', 'syncing');
             try {
                 await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                setStatus('Synced'); setTimeout(() => setStatus('v2.1.0-stable'), 2000);
+                setStatus('Synced'); setTimeout(() => setStatus('v2.3.0-stable'), 2000);
             } catch (e) { setStatus('Sync Error', 'error'); }
         }
 
         function toggleRawEdit() {
             isRawEditing = !isRawEditing;
-            const list = document.getElementById('todoList');
-            const editorCont = document.getElementById('rawEditorContainer');
-            const addBar = document.getElementById('addBar');
-            const btn = document.getElementById('rawEditBtn');
-
+            const list = document.getElementById('todoList'), editorCont = document.getElementById('rawEditorContainer'), addBar = document.getElementById('addBar'), btn = document.getElementById('rawEditBtn');
             if (isRawEditing) {
                 document.getElementById('rawEditor').value = allTasks.join('\n');
-                list.classList.add('hidden');
-                addBar.classList.add('invisible');
-                editorCont.classList.remove('hidden');
-                btn.innerText = "Close Editor";
+                list.classList.add('hidden'); addBar.classList.add('invisible'); editorCont.classList.remove('hidden'); btn.innerText = "Close Editor";
             } else {
-                list.classList.remove('hidden');
-                addBar.classList.remove('invisible');
-                editorCont.classList.add('hidden');
-                btn.innerText = "Raw Edit";
+                list.classList.remove('hidden'); addBar.classList.remove('invisible'); editorCont.classList.add('hidden'); btn.innerText = "Raw Edit";
             }
         }
 
         function saveRawEdit() {
-            const rawValue = document.getElementById('rawEditor').value;
-            allTasks = rawValue.split('\n').filter(t => t.trim() !== "");
-            saveTasks();
-            toggleRawEdit();
-            render();
+            allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== "");
+            saveTasks(); toggleRawEdit(); render();
         }
 
         function downloadBackup() {
             const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `todo-backup-${new Date().toISOString().split('T')[0]}.txt`;
-            a.click();
+            a.href = url; a.download = `todo-backup-${new Date().toISOString().split('T')[0]}.txt`; a.click();
         }
 
         function addTask() {
             const inp = document.getElementById('newTodo');
             if (!inp.value.trim()) return;
             allTasks.push(inp.value.trim()); inp.value = "";
-            hideSuggestions(); render(); saveTasks();
+            render(); saveTasks();
         }
-
-        function handleInput(e, inputEl) {
-            const val = inputEl.value;
-            const words = val.substring(0, inputEl.selectionStart).split(/\s/);
-            const lastWord = words[words.length - 1];
-            if (lastWord.startsWith('@') || lastWord.startsWith('+')) showSuggestions(lastWord, inputEl);
-            else hideSuggestions();
-        }
-
-        function showSuggestions(query, inputEl) {
-            suggestionTarget = inputEl;
-            const type = query[0];
-            const matches = [...new Set(allTasks.join(' ').match(type === '@' ? /@\w+/g : /\+\w+/g))].filter(m => m.toLowerCase().includes(query.toLowerCase()));
-            const box = inputEl.id === 'newTodo' ? document.getElementById('suggestions') : document.getElementById('inlineSuggestions');
-            if (matches.length === 0) { box.classList.add('hidden'); return; }
-            if (inputEl.id !== 'newTodo') {
-                const rect = inputEl.getBoundingClientRect();
-                box.style.left = `${rect.left}px`; box.style.top = `${rect.bottom + window.scrollY}px`; box.style.width = `${rect.width}px`;
-            } else { box.style.bottom = "-155px"; box.style.left = "0"; box.style.width = "100%"; }
-            box.innerHTML = matches.map(m => `<div class="suggestion-item" onclick="applySuggestion('${m}')">${m}</div>`).join('');
-            box.classList.remove('hidden');
-        }
-
-        function applySuggestion(word) {
-            const val = suggestionTarget.value;
-            const words = val.substring(0, suggestionTarget.selectionStart).split(/\s/);
-            words[words.length - 1] = word;
-            suggestionTarget.value = words.join(' ') + " " + val.substring(suggestionTarget.selectionStart);
-            suggestionTarget.focus(); hideSuggestions();
-        }
-
-        function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); document.getElementById('inlineSuggestions').classList.add('hidden'); }
 
         function toggleFilter(f) {
-            if (activeFilters.has(f)) activeFilters.delete(f);
-            else activeFilters.add(f);
+            activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f);
             render();
         }
 
         function resetAll() {
-            activeFilters.clear();
-            document.getElementById('searchInput').value = "";
-            if(isRawEditing) toggleRawEdit();
-            render();
+            activeFilters.clear(); document.getElementById('searchInput').value = "";
+            if(isRawEditing) toggleRawEdit(); render();
         }
 
         function render() {
-            const list = document.getElementById('todoList');
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const filterContainer = document.getElementById('activeFilters');
-            const resetBtn = document.getElementById('resetBtn');
+            const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase(), filterContainer = document.getElementById('activeFilters'), resetBtn = document.getElementById('resetBtn');
 
             filterContainer.innerHTML = Array.from(activeFilters).map(f => `
                 <div class="flex items-center bg-blue-900/40 text-blue-400 border border-blue-500/50 px-3 py-1 rounded text-xs font-bold gap-2">
-                    <span>${f.includes('due:') ? f.replace('due:', '') : f}</span>
+                    <span>${f.replace('due:', '')}</span>
                     <button onclick="toggleFilter('${f}')" class="hover:text-white">✕</button>
                 </div>`).join('');
 
-            resetBtn.className = (activeFilters.size > 0 || search) ? 'block text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded hover:bg-red-900/40 transition-all font-bold uppercase cursor-pointer' : 'hidden';
+            resetBtn.className = (activeFilters.size > 0 || search) ? 'block text-[10px] bg-red-900/20 text-red-400 border border-red-900/50 px-2 py-1 rounded font-bold uppercase cursor-pointer' : 'hidden';
 
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex }));
-            activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f)); });
-            if (search) display = display.filter(t => t.text.toLowerCase().includes(search));
+            
+            activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.text.startsWith('#')); });
+            if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.text.startsWith('#'));
 
             list.innerHTML = display.map(item => {
+                const headerMatch = item.text.match(/^(#+)\s+(.*)$/);
+                if (headerMatch) {
+                    const level = headerMatch[1].length;
+                    const content = headerMatch[2];
+                    // Style differently based on # level
+                    const fontSize = level === 1 ? 'text-lg text-blue-500' : level === 2 ? 'text-sm text-blue-400' : 'text-xs text-blue-300';
+                    const spacing = level === 1 ? 'pt-10' : 'pt-6';
+                    
+                    return `<div class="${spacing} pb-2 border-b border-[#333] mb-4">
+                        <input type="text" value="${item.text}" onblur="updateTaskText(${item.originalIndex}, this.value)" class="bg-transparent border-none outline-none font-black uppercase tracking-widest w-full ${fontSize}">
+                    </div>`;
+                }
+
                 const isDone = item.text.startsWith('x ');
                 const color = isDone ? 'border-l-gray-700 opacity-50' : item.text.startsWith('(A)') ? 'border-l-red-500 text-red-400 font-bold' : 'border-l-blue-600';
                 return `<div class="group flex items-center bg-[#1e1e1e] border-l-4 ${color} mb-1 p-3 transition-all hover:bg-[#252525]">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onclick="toggleTask(${item.originalIndex})" class="w-4 h-4 mr-4 cursor-pointer accent-blue-500">
                     <input type="text" value="${item.text.replace(/"/g, '&quot;')}" 
-                           oninput="handleInput(event, this)"
-                           onblur="setTimeout(() => { updateTaskText(${item.originalIndex}, this.value); hideSuggestions(); }, 200)"
+                           onblur="updateTaskText(${item.originalIndex}, this.value)"
                            onkeypress="if(event.key === 'Enter') this.blur()"
                            class="flex-1 bg-transparent outline-none ${isDone ? 'line-through text-gray-500' : ''} text-sm">
                     <button onclick="deleteTask(${item.originalIndex})" class="text-gray-600 hover:text-red-500 px-2 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                 </div>`;
             }).join('');
 
-            const openTasks = allTasks.filter(t => !t.startsWith('x '));
+            const openTasks = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#'));
             const sidebar = (id, re, c) => {
                 const uniqueMatches = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = uniqueMatches.map(v => {
