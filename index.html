@@ -28,7 +28,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.1.2</div>
+        <div id="statusText">v3.2.1</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -53,11 +53,9 @@
                     <button onclick="doLogout()" class="text-gray-600">Logout</button>
                 </div>
             </div>
-
             <div class="flex w-full">
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full bg-[#0a0a0a] border border-[#333] rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500 text-white">
             </div>
-
             <div id="addBar" class="flex gap-2">
                 <input type="text" id="newTodo" onkeypress="if(event.key === 'Enter') addTask()" placeholder="Add task (A) @context +project..." class="flex-1 bg-[#0a0a0a] border border-[#444] rounded px-4 py-2 text-sm outline-none focus:border-blue-500 text-white">
                 <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white">Add</button>
@@ -67,6 +65,12 @@
 
     <div class="flex flex-1 overflow-hidden relative">
         <aside id="sidebar" class="closed fixed inset-y-0 left-0 w-64 bg-[#121212] p-6 z-50 border-r border-[#333] md:relative md:translate-x-0 md:block overflow-y-auto">
+            <div class="mb-6 flex justify-between items-center">
+                <h2 class="text-[10px] font-black text-gray-500 uppercase tracking-widest text-white">Filters</h2>
+                <button onclick="resetAll()" class="text-[9px] bg-red-900/30 text-red-400 px-2 py-1 rounded hover:bg-red-900/50 transition font-bold uppercase tracking-tighter">Reset All</button>
+            </div>
+            
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Status</h2><div id="statusFilters" class="space-y-1 text-sm"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-sm"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-yellow-500/50">Due</h2><div id="dueList" class="space-y-1 text-sm"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-blue-500/50">Projects</h2><div id="projectList" class="space-y-1 text-sm"></div></div>
@@ -88,7 +92,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = window.location.origin + window.location.pathname;
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, editingIndex = null;
+        let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, editingIndex = null, showPastDueOnly = false;
 
         function setupPWA() {
             const manifest = {
@@ -134,7 +138,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 App Initialized"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-23 App Initialized"]; render(); }
         }
 
         async function saveTasks() {
@@ -146,7 +150,9 @@
             const p = text.match(/^\(([A-Z])\)/);
             const d = text.match(/due:(\d{4}-\d{2}-\d{2})/);
             const pr = text.match(/\+(\w+)/);
-            return { priority: p ? p[1] : 'Z', due: d ? d[1] : '9999-12-31', project: pr ? pr[1] : 'ZZZ', isHeader: text.startsWith('#') };
+            const today = new Date().toISOString().split('T')[0];
+            const isPastDue = d && d[1] < today && !text.startsWith('x ');
+            return { priority: p ? p[1] : 'Z', due: d ? d[1] : '9999-12-31', project: pr ? pr[1] : 'ZZZ', isHeader: text.startsWith('#'), isPastDue };
         }
 
         function toggleTask(i) {
@@ -187,7 +193,10 @@
             const list = document.getElementById('todoList'), search = document.getElementById('searchInput').value.toLowerCase();
             let display = allTasks.map((text, originalIndex) => ({ text, originalIndex, meta: getTaskMeta(text) }));
             
-            if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            // Logic: Past Due filter always hides completed tasks
+            if (!showCompleted || showPastDueOnly) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            if (showPastDueOnly) display = display.filter(t => t.meta.isPastDue || t.meta.isHeader);
+            
             activeFilters.forEach(f => { display = display.filter(t => t.text.includes(f) || t.meta.isHeader); });
             if (search) display = display.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
 
@@ -205,7 +214,6 @@
                         .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>')
                         .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
-                        // Updated link: keyword logic
                         .replace(/link:((https?:\/\/|www\.)[^\s]+)/g, (match, url) => {
                             const href = url.startsWith('www.') ? `http://${url}` : url;
                             return `<a href="${href}" target="_blank" class="text-blue-500 underline hover:text-blue-400 inline-flex items-center gap-1 font-bold" onclick="event.stopPropagation()">link <span class="text-[10px]">↗️</span></a>`;
@@ -225,6 +233,14 @@
 
         function updateSidebars() {
             const open = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#'));
+            
+            // Status Filters (Past Due)
+            const pastDueCount = allTasks.filter(t => getTaskMeta(t).isPastDue).length;
+            document.getElementById('statusFilters').innerHTML = `
+                <div onclick="togglePastDue()" class="flex justify-between items-center cursor-pointer mb-2 ${showPastDueOnly ? 'text-white font-bold' : 'text-red-400 hover:text-white'}">
+                    <span>Past Due</span><span class="text-[10px] bg-red-900/30 px-2 py-0.5 rounded text-red-400">${pastDueCount}</span>
+                </div>`;
+
             const sb = (id, re, c) => {
                 const items = [...new Set(allTasks.join(' ').match(re) || [])].sort();
                 document.getElementById(id).innerHTML = items.map(v => {
@@ -241,12 +257,21 @@
             sb('contextList', /@\w+/g, 'text-green-400');
         }
 
+        function togglePastDue() { showPastDueOnly = !showPastDueOnly; if(showPastDueOnly) activeFilters.clear(); render(); }
         function deleteTask(i) { allTasks.splice(i, 1); render(); saveTasks(); }
-        function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
+        function toggleFilter(f) { showPastDueOnly = false; activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('closed'); document.getElementById('sidebarOverlay').classList.toggle('hidden'); }
         function toggleRawEdit() { isRawEditing = !isRawEditing; document.getElementById('todoList').classList.toggle('hidden', isRawEditing); document.getElementById('rawEditorContainer').classList.toggle('hidden', !isRawEditing); if(isRawEditing) document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-        function resetAll() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
+        
+        function resetAll() { 
+            activeFilters.clear(); 
+            showPastDueOnly = false;
+            showCompleted = true; // Return to default state
+            document.getElementById('doneToggle').innerText = "Hide Done";
+            document.getElementById('searchInput').value = ""; 
+            render(); 
+        }
         init();
     </script>
 </body>
