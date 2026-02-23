@@ -28,7 +28,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v3.0.0</div>
+        <div id="statusText">v3.1.1</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
@@ -75,7 +75,6 @@
 
         <main class="flex-1 p-4 md:p-6 overflow-y-auto w-full">
             <div id="todoList" class="space-y-1 max-w-4xl mx-auto w-full pb-20"></div>
-            
             <div id="rawEditorContainer" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full h-full pb-10">
                 <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] text-gray-300 font-mono text-sm p-4 border border-[#333] rounded outline-none leading-relaxed resize-none"></textarea>
                 <button onclick="saveRawEdit()" class="mt-4 bg-orange-600 text-white py-3 rounded text-xs font-bold uppercase tracking-widest">Save Changes</button>
@@ -105,11 +104,6 @@
             const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
             const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
             document.head.appendChild(link);
-            if ('serviceWorker' in navigator) {
-                const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
-                const swBlob = new Blob([sw], {type: 'text/javascript'});
-                navigator.serviceWorker.register(URL.createObjectURL(swBlob));
-            }
         }
 
         async function init() {
@@ -138,7 +132,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 Click text to edit"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 App Initialized"]; render(); }
         }
 
         async function saveTasks() {
@@ -183,8 +177,7 @@
 
         function toggleCompletedVisibility() {
             showCompleted = !showCompleted;
-            const btn = document.getElementById('doneToggle');
-            btn.innerText = showCompleted ? "Hide Done" : "Show Done";
+            document.getElementById('doneToggle').innerText = showCompleted ? "Hide Done" : "Show Done";
             render();
         }
 
@@ -210,9 +203,10 @@
                         .replace(/(@\w+)/g, '<span class="text-green-400 font-bold">$1</span>')
                         .replace(/(due:\d{4}-\d{2}-\d{2})/g, '<span class="text-yellow-500">$1</span>')
                         .replace(/(\d{4}-\d{2}-\d{2})/g, '<span class="text-gray-500 font-mono text-[11px] mr-1">$1</span>')
-                        .replace(/((https?:\/\/|www\.)[^\s]+)/g, (url) => {
+                        // Fixed "link:" logic
+                        .replace(/link:((https?:\/\/|www\.)[^\s]+)/g, (match, url) => {
                             const href = url.startsWith('www.') ? `http://${url}` : url;
-                            return `<a href="${href}" target="_blank" class="text-blue-500 underline hover:text-blue-400 flex items-center gap-1 inline-flex" onclick="event.stopPropagation()">${url} <span class="text-xs">↗️</span></a>`;
+                            return `<a href="${href}" target="_blank" class="text-blue-500 underline hover:text-blue-400 inline-flex items-center gap-1 font-bold" onclick="event.stopPropagation()">link <span class="text-[10px]">↗️</span></a>`;
                         });
                     content = `<div class="flex-1 text-sm cursor-text ${isDone ? 'line-through text-gray-500 font-mono italic text-xs' : ''}" onclick="startEditing(${item.originalIndex})">${hText}</div>`;
                 }
