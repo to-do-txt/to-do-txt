@@ -28,13 +28,13 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-green-500"></div>
-        <div id="statusText">v2.9.7-pwa-final</div>
+        <div id="statusText">v2.9.9-pwa-final</div>
     </div>
 
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex items-center justify-center hidden">
         <div class="text-center bg-[#1e1e1e] p-10 rounded-2xl border border-gray-800 mx-4">
-            <h1 class="text-2xl font-bold mb-4 text-blue-500 font-black">to-do-txt</h1>
-            <p class="text-xs text-gray-500 mb-6">Simple tasks, synced via Dropbox</p>
+            <h1 class="text-2xl font-bold mb-4 text-blue-500 font-black tracking-tighter">to-do-txt</h1>
+            <p class="text-xs text-gray-500 mb-6 uppercase tracking-widest">Minimalist Task Sync</p>
             <button onclick="doLogin()" class="bg-blue-600 px-10 py-3 rounded-lg font-bold w-full text-white shadow-lg">Connect Dropbox</button>
         </div>
     </div>
@@ -90,10 +90,15 @@
 
         function setupPWA() {
             const manifest = {
-                name: "to-do-txt", short_name: "to-do-txt", start_url: ".", display: "standalone",
-                background_color: "#121212", theme_color: "#1e1e1e",
+                name: "to-do-txt",
+                short_name: "to-do-txt",
+                start_url: ".",
+                display: "standalone",
+                background_color: "#121212",
+                theme_color: "#1e1e1e",
                 icons: [
-                    { src: "https://cdn-icons-png.flaticon.com/512/2098/2098402.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+                    { src: "assets/todo_txt_icon_64x64.png", sizes: "64x64", type: "image/png" },
+                    { src: "assets/todo_txt_icon_256x256.png", sizes: "256x256", type: "image/png", purpose: "any maskable" }
                 ]
             };
             const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
@@ -132,7 +137,7 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
-            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 Click text to edit", "Check the link: www.google.com"]; render(); }
+            } catch (e) { allTasks = ["# Welcome", "(A) 2026-02-22 New Install Setup Done!"]; render(); }
         }
 
         async function saveTasks() {
