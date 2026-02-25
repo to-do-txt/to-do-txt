@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.4</title>
+    <title>to-do-txt v3.6.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -12,14 +12,12 @@
         
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
-        /* Layout Structure */
         .app-grid { display: grid; grid-template-columns: 260px 1fr; flex: 1; overflow: hidden; }
         @media (max-width: 768px) { .app-grid { grid-template-columns: 1fr; } .sidebar-hidden { display: none; } }
 
-        /* Typography */
         .h1-style { font-size: 1.25rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.75rem 0; text-transform: uppercase; }
         .h2-style { font-size: 1rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.5rem 0; text-transform: uppercase; }
-        .h3-style { font-size: 0.75rem; font-weight: 900; color: #93c5fd; margin: 1rem 0 0.5rem 0; text-transform: uppercase; opacity: 0.8; }
+        .h3-style { font-size: 0.75rem; font-weight: 900; color: #93c5fd; margin: 1rem 0 0.5rem 0; text-transform: uppercase; }
 
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
@@ -29,11 +27,10 @@
         .prio-b { border-color: #facc15; }
         .prio-none { border-color: #3b82f6; }
         
-        #status-bar { z-index: 100; background: var(--bg-app); border-top: 1px solid var(--border); height: 32px; }
+        #status-bar { z-index: 100; background: var(--bg-app); border-top: 1px solid var(--border); height: 35px; }
         
-        /* Autocomplete Box */
-        #suggestions { z-index: 200; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
-        .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.875rem; border-bottom: 1px solid var(--border); }
+        #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); max-height: 200px; overflow-y: auto; }
+        .suggestion-item { padding: 10px 15px; cursor: pointer; font-size: 0.875rem; border-bottom: 1px solid var(--border); }
         .suggestion-item:hover, .suggestion-active { background-color: #3b82f6; color: white; }
     </style>
 </head>
@@ -45,11 +42,11 @@
                 <div class="flex items-center gap-3">
                     <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl">☰</button>
                     <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase">Sync Now</button>
+                    <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase">Force Sync</button>
                 </div>
                 
                 <div class="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
-                    <button onclick="toggleTheme()" class="text-yellow-500">☀️ Light</button>
+                    <button onclick="toggleTheme()" class="text-yellow-500">☀️ Theme</button>
                     <button onclick="toggleHeaderVisibility()" class="text-green-500">Headers</button>
                     <button onclick="toggleCompletedVisibility()" class="text-purple-500">Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-500">Raw</button>
@@ -62,14 +59,14 @@
             <div class="relative flex gap-2">
                 <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="flex-1 input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500">Add</button>
-                <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1 overflow-hidden"></div>
+                <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1"></div>
             </div>
         </div>
     </header>
 
     <div class="app-grid">
         <aside id="sidebar" class="p-6 border-r overflow-y-auto card-bg sidebar-hidden md:block">
-            <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded hover:bg-blue-500/10 uppercase tracking-tighter">Clear All Filters</button>
+            <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded hover:bg-blue-500/10 uppercase">Reset All View</button>
             
             <div id="pdCont" class="mb-8 hidden">
                 <h2 class="text-[10px] font-black text-red-500 mb-4 uppercase tracking-widest">Past Due</h2>
@@ -80,7 +77,7 @@
             <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-green-500/50">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
         </aside>
         
-        <main class="p-6 overflow-y-auto relative">
+        <main class="p-6 overflow-y-auto">
             <div id="todoList" class="max-w-4xl mx-auto space-y-1 pb-20"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
                 <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-4 border rounded resize-none mb-4"></textarea>
@@ -89,15 +86,13 @@
         </main>
     </div>
 
-    <footer id="status-bar" class="flex items-center justify-between px-4 text-[10px] font-mono text-gray-500">
-        <div class="flex items-center gap-4">
-            <div class="flex items-center gap-2">
-                <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
-                <span id="statusText">Ready</span>
-            </div>
-            <span class="border-l border-gray-800 pl-3">v3.6.4</span>
+    <footer id="status-bar" class="flex items-center justify-between px-6 text-[10px] font-mono text-gray-500">
+        <div class="flex items-center gap-3">
+            <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
+            <span id="statusText">Ready</span>
         </div>
-        <div id="totalCounter" class="font-bold text-blue-500">Tasks: 0</div>
+        <div class="font-bold tracking-widest opacity-50">VERSION 3.6.5</div>
+        <div id="totalCounter" class="font-bold text-blue-500">OPEN TASKS: 0</div>
     </footer>
 
     <script>
@@ -156,20 +151,20 @@
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
             
-            // 1. Constrained Filtering Logic
-            let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
+            // 1. FILTER ENGINE (STRICT INTERSECTION)
+            let filteredTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
 
-            if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
-            if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
-            if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+            if (!showCompleted) filteredTasks = filteredTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            if (!showHeaders) filteredTasks = filteredTasks.filter(t => !t.meta.isHeader);
+            if (search) filteredTasks = filteredTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
             
             activeFilters.forEach(f => {
-                if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
-                else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
+                if (f === 'OVERDUE') filteredTasks = filteredTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
+                else filteredTasks = filteredTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            // 2. Render List
-            list.innerHTML = displayTasks.map(item => {
+            // 2. RENDER MAIN UI
+            list.innerHTML = filteredTasks.map(item => {
                 if (item.meta.isHeader) {
                     const level = item.text.match(/^#+/)[0].length;
                     return `<div class="${level === 1 ? 'h1-style' : level === 2 ? 'h2-style' : 'h3-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
@@ -190,11 +185,43 @@
                 return `<div class="group flex items-center p-3 card-bg rounded-r border-l-4 ${pClass} ${isDone ? 'opacity-40 italic' : ''} mb-1 hover:brightness-110">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-5 h-5 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-sm cursor-text" onclick="startEdit(${item.i})">${html}</div>
-                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2">✕</button>
+                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             
-            updateSidebarAndStatus(displayTasks);
+            updateSidebarConstraints(filteredTasks);
+        }
+
+        function updateSidebarConstraints(filteredTasks) {
+            const updateCategory = (id, regex, color) => {
+                const counts = {};
+                // Only count tags found in tasks that survived ALL current filters
+                filteredTasks.forEach(t => { 
+                    if(!t.text.startsWith('x ') && !t.meta.isHeader) {
+                        (t.text.match(regex) || []).forEach(tag => counts[tag] = (counts[tag] || 0) + 1);
+                    }
+                });
+
+                const html = Object.entries(counts).sort().map(([tag, count]) => {
+                    const active = activeFilters.has(tag) ? 'font-bold text-white bg-blue-600/20' : color;
+                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active}"><span>${tag}</span><span class="opacity-50">${count}</span></div>`;
+                }).join('');
+
+                document.getElementById(id).innerHTML = html || '<div class="text-[10px] text-gray-600 italic px-1">None in view</div>';
+            };
+
+            updateCategory('priorityList', /\([A-Z]\)/g, 'text-orange-400');
+            updateCategory('projectList', /\+[\w\-]+/g, 'text-blue-400');
+            updateCategory('contextList', /@[\w\-]+/g, 'text-green-400');
+
+            const odTasks = filteredTasks.filter(t => t.meta.isOverdue).length;
+            const odCont = document.getElementById('pdCont');
+            if (odTasks > 0) {
+                odCont.classList.remove('hidden');
+                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('OVERDUE')" class="flex justify-between p-1.5 rounded cursor-pointer ${activeFilters.has('OVERDUE') ? 'text-white bg-red-600/20 font-bold' : 'text-red-400'}"><span>Overdue</span><span>${odTasks}</span></div>`;
+            } else odCont.classList.add('hidden');
+
+            document.getElementById('totalCounter').innerText = `OPEN TASKS: ${allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#')).length}`;
         }
 
         function getMeta(t) {
@@ -203,32 +230,7 @@
             return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null, isOverdue };
         }
 
-        function updateSidebarAndStatus(visibleTasks) {
-            const build = (id, regex, color) => {
-                const counts = {};
-                // Cross-filtering: Only show counts for tags present in the currently filtered list
-                visibleTasks.forEach(t => { if(!t.text.startsWith('x ')) (t.text.match(regex) || []).forEach(tag => counts[tag] = (counts[tag] || 0) + 1); });
-                document.getElementById(id).innerHTML = Object.entries(counts).sort().map(([tag, count]) => {
-                    const active = activeFilters.has(tag) ? 'font-bold text-white bg-blue-600/20' : color;
-                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-1 rounded cursor-pointer ${active}"><span>${tag}</span><span>${count}</span></div>`;
-                }).join('');
-            };
-
-            build('priorityList', /\([A-Z]\)/g, 'text-orange-400');
-            build('projectList', /\+[\w\-]+/g, 'text-blue-400');
-            build('contextList', /@[\w\-]+/g, 'text-green-400');
-
-            const odTasks = visibleTasks.filter(t => t.meta.isOverdue).length;
-            const odCont = document.getElementById('pdCont');
-            if (odTasks > 0) {
-                odCont.classList.remove('hidden');
-                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('OVERDUE')" class="flex justify-between p-1 rounded cursor-pointer ${activeFilters.has('OVERDUE') ? 'text-white bg-red-600/20 font-bold' : 'text-red-400'}"><span>Overdue</span><span>${odTasks}</span></div>`;
-            } else odCont.classList.add('hidden');
-
-            document.getElementById('totalCounter').innerText = `Tasks: ${allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#')).length}`;
-        }
-
-        // --- Suggestion Logic ---
+        // --- Suggestions & Input ---
         function handleInput(e) {
             const val = e.target.value;
             const cursor = e.target.selectionStart;
@@ -237,18 +239,14 @@
 
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
                 const prefix = lastWord[0];
-                const search = lastWord.slice(1).toLowerCase();
                 const tags = [...new Set(allTasks.flatMap(t => t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))]
                                 .filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
-                
                 if (tags.length) {
                     sugBox.innerHTML = tags.map((t, i) => `<div class="suggestion-item ${i === suggestionIdx ? 'suggestion-active' : ''}" onclick="applySuggestion('${t}')">${t}</div>`).join('');
-                    sugBox.classList.remove('hidden');
-                    return;
+                    sugBox.classList.remove('hidden'); return;
                 }
             }
-            sugBox.classList.add('hidden');
-            suggestionIdx = -1;
+            sugBox.classList.add('hidden'); suggestionIdx = -1;
         }
 
         function handleInputKeyDown(e) {
@@ -270,9 +268,8 @@
             inp.focus();
         }
 
-        // --- Standard Controls ---
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
-        function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
+        function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; showCompleted = true; showHeaders = true; render(); }
         function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
         function finishEdit(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
         function addTask() {
@@ -285,8 +282,8 @@
             allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`;
             render(); saveTasks();
         }
-        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
-        function hardLogout() { if(confirm("Logout from Dropbox?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
+        function deleteTask(i) { if(confirm("Delete task permanently?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
+        function hardLogout() { if(confirm("Logout?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
         function toggleTheme() { document.body.classList.toggle('light-mode'); }
         function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
         function toggleHeaderVisibility() { showHeaders = !showHeaders; render(); }
