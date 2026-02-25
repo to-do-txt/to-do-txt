@@ -3,38 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.26</title>
+    <title>to-do-txt v3.6.28</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        
         .app-grid { display: grid; grid-template-columns: 280px 1fr; flex: 1; overflow: hidden; }
-        
         @media (max-width: 768px) { 
             .app-grid { grid-template-columns: 1fr; } 
-            #sidebar { 
-                position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000; 
-                width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.8);
-                display: flex; flex-direction: column;
-                transform: translateX(-100%); transition: transform 0.2s ease;
-            }
+            #sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000; width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; transform: translateX(-100%); transition: transform 0.2s ease; }
             #sidebar.sidebar-open { transform: translateX(0); }
         }
-
-        /* Dynamic Active States */
         .btn-active-green { background-color: #22c55e !important; color: #000 !important; font-weight: 900; border-color: #22c55e !important; }
         .btn-active-purple { background-color: #a855f7 !important; color: #000 !important; font-weight: 900; border-color: #a855f7 !important; }
         .btn-active-orange { background-color: #f97316 !important; color: #000 !important; font-weight: 900; border-color: #f97316 !important; }
-        .btn-active-blue { background-color: #3b82f6 !important; color: #fff !important; font-weight: 900; border-color: #3b82f6 !important; }
-
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
-        
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
     </style>
@@ -63,11 +51,10 @@
                         <button id="dt-toggle-headers" onclick="toggleHeaderVisibility()" class="px-2 py-1 rounded border border-green-500/40 text-green-500 transition-all">Headers</button>
                         <button id="dt-toggle-done" onclick="toggleCompletedVisibility()" class="px-2 py-1 rounded border border-purple-500/40 text-purple-500 transition-all">Done</button>
                         <button id="dt-toggle-raw" onclick="toggleRawEdit()" class="px-2 py-1 rounded border border-orange-500/40 text-orange-500 transition-all">Raw</button>
-                        <button onclick="saveTasks()" class="px-2 py-1 rounded border border-blue-500/40 text-blue-500 hover:bg-blue-600 hover:text-white transition-all">Backup</button>
+                        <button onclick="downloadLocalBackup()" class="px-2 py-1 rounded border border-blue-500/40 text-blue-500 hover:bg-blue-600 hover:text-white transition-all">Backup</button>
                     </div>
                 </div>
             </div>
-            
             <div class="flex flex-col md:flex-row gap-3">
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex gap-2">
@@ -85,40 +72,34 @@
                 <span class="font-black text-blue-500 uppercase text-xs tracking-widest">Filters</span>
                 <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
             </div>
-            
             <div class="flex-1 overflow-y-auto p-6 space-y-8">
                 <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
-                
                 <section>
                     <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Filters</h2>
                     <div id="dateList" class="space-y-1 text-xs"></div>
                 </section>
-
                 <section>
                     <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2>
                     <div id="priorityList" class="space-y-1 text-xs"></div>
                 </section>
-
                 <section>
                     <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
                     <div id="projectList" class="space-y-1 text-xs"></div>
                 </section>
-
                 <section class="pb-24">
                     <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
                     <div id="contextList" class="space-y-1 text-xs"></div>
                 </section>
             </div>
-
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="grid grid-cols-2 gap-2 mb-4 md:hidden">
                     <button id="mb-toggle-headers" onclick="toggleHeaderVisibility()" class="text-[10px] font-black uppercase py-2 border border-green-500/40 text-green-500 rounded transition-all">Headers</button>
                     <button id="mb-toggle-done" onclick="toggleCompletedVisibility()" class="text-[10px] font-black uppercase py-2 border border-purple-500/40 text-purple-500 rounded transition-all">Done</button>
                     <button id="mb-toggle-raw" onclick="toggleRawEdit()" class="text-[10px] font-black uppercase py-2 border border-orange-500/40 text-orange-500 rounded transition-all">Raw Edit</button>
-                    <button onclick="saveTasks()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
+                    <button onclick="downloadLocalBackup()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v3.6.26</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v3.6.28</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -190,16 +171,37 @@
             finally { isSyncing = false; }
         }
 
+        async function downloadLocalBackup() {
+            if (!dbx) return;
+            setStatus("Exporting...", true);
+            try {
+                const res = await dbx.filesDownload({ path: '/todo.txt' });
+                const blob = res.result.fileBlob;
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[:.]/g, '-').split('T');
+                a.href = url;
+                a.download = `todo-backup-${timestamp[0]}-${timestamp[1].substring(0,5)}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                setStatus("Backup Downloaded");
+            } catch (e) {
+                setStatus("Backup Failed");
+                console.error(e);
+            }
+        }
+
         function render() {
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const sortVal = document.getElementById('sortOrder').value;
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
-            
             if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
             if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
-            
             activeFilters.forEach(f => {
                 if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
@@ -207,16 +209,12 @@
                 else if (f === 'NODATE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
-
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
-
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
-
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 if (editingIndex === item.i) return `<div class="p-3 card-bg border border-blue-500 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)"></div>`;
-                
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
                 let html = item.text
@@ -224,7 +222,6 @@
                     .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
-
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
@@ -246,7 +243,6 @@
                     if (t.meta.due) specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
                 }
             });
-
             let dateHtml = '';
             const addDateItem = (label, key, color) => {
                 if (counts[key] > 0 || activeFilters.has(key)) {
@@ -258,13 +254,11 @@
             addDateItem('Today', 'TODAY', 'text-yellow-500');
             addDateItem('Upcoming', 'UPCOMING', 'text-green-400');
             addDateItem('No Due Date', 'NODATE', 'text-gray-500');
-            
             Object.keys(specificDates).sort().forEach(d => {
                 const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
                 dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-2 rounded cursor-pointer ${active} border-l border-gray-800 ml-2 hover:bg-white/5"><span>${d}</span><span class="opacity-40">${specificDates[d]}</span></div>`;
             });
             document.getElementById('dateList').innerHTML = dateHtml || '<div class="opacity-30 italic">No dates</div>';
-
             const updateCat = (id, regex, color) => {
                 const c = {};
                 filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
@@ -302,7 +296,6 @@
             }
             sugBox.classList.add('hidden');
         }
-
         function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
         function applySuggestion(tag) { const inp = document.getElementById('newTodo'); const words = inp.value.split(' '); words[words.length-1] = tag; inp.value = words.join(' ') + ' '; inp.focus(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
