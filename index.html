@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.20</title>
+    <title>to-do-txt v3.6.21</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* New Flex Layout */
         .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
         
         #sidebar { 
@@ -34,42 +33,50 @@
 
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
-        .card-bg { background-color: var(--bg-card); }
-        .input-bg { background-color: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); }
         .prio-a { border-left: 4px solid #fb923c; } .prio-b { border-left: 4px solid #facc15; } .prio-none { border-left: 4px solid #3b82f6; }
-        #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto; }
-        .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
-        .suggestion-item:hover { background-color: #3b82f6; }
+        .header-link { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: opacity 0.2s; }
+        .header-link:hover { opacity: 0.7; }
     </style>
 </head>
 <body class="font-sans">
 
-    <header class="p-6 card-bg border-b shadow-lg z-50">
+    <header class="p-6 bg-[#1e1e1e] border-b border-[#333] shadow-lg z-50">
         <div class="max-w-6xl mx-auto flex flex-col gap-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <button onclick="toggleSidebar()" class="text-muted text-xl p-1">☰</button>
+                    <button onclick="toggleSidebar()" class="text-gray-400 text-xl p-1">☰</button>
                     <div class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
                     <div id="syncIndicator" class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
                         <div class="w-2 h-2 rounded-full bg-green-600"></div>
                         <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60">Ready</span>
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
+
+                <div class="hidden md:flex items-center gap-5">
+                    <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60 mr-2">0/0</span>
                     <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-1 text-[10px] font-bold uppercase outline-none">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
+                    <div class="h-4 w-[1px] bg-gray-700 mx-1"></div>
+                    <span onclick="toggleHeaderVisibility()" class="header-link text-green-500">Headers</span>
+                    <span onclick="toggleCompletedVisibility()" class="header-link text-purple-500">Done</span>
+                    <span onclick="toggleRawEdit()" class="header-link text-orange-500">Raw</span>
+                    <span onclick="hardLogout()" class="header-link text-gray-500">Logout</span>
+                </div>
+
+                <div class="md:hidden flex items-center gap-2">
+                    <span id="viewCounterMobile" class="text-[10px] font-bold uppercase text-blue-400/60">0/0</span>
                 </div>
             </div>
+
             <div class="flex flex-col md:flex-row gap-3">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 bg-[#0a0a0a] border border-[#333] rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="What needs to be done?" class="flex-1 input-bg rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500">Add</button>
-                    <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1"></div>
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="if(event.key==='Enter') addTask()" oninput="handleInput(event)" placeholder="What needs to be done?" class="flex-1 bg-[#0a0a0a] border border-[#333] rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500 transition-colors">Add</button>
+                    <div id="suggestions" class="hidden absolute top-full left-0 w-full bg-[#1e1e1e] border border-[#333] rounded-b-md mt-1 z-[200]"></div>
                 </div>
             </div>
         </div>
@@ -79,23 +86,30 @@
         <aside id="sidebar" class="p-6 overflow-y-auto">
             <div class="flex justify-between items-center mb-8">
                 <div class="flex items-center gap-2">
-                    <span class="font-bold text-blue-500 uppercase text-xs tracking-widest">Menu</span>
-                    <button id="pinBtn" onclick="handlePinToggle()" class="hidden md:block text-muted hover:text-blue-500 text-xs">📌</button>
+                    <span class="font-bold text-blue-500 uppercase text-xs tracking-widest">Filters</span>
+                    <button id="pinBtn" onclick="handlePinToggle()" class="hidden md:block text-gray-500 hover:text-blue-500 text-xs">📌</button>
                 </div>
                 <button onclick="closeSidebar()" class="text-xl px-2">✕</button>
             </div>
             
-            <div class="mb-8">
+            <div class="md:hidden mb-8">
                 <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Tools</h2>
-                <div class="grid grid-cols-1 gap-1">
-                    <button onclick="toggleHeaderVisibility()" class="text-left px-3 py-2 rounded bg-white/5 text-[11px] font-bold hover:bg-white/10">Toggle Headers</button>
-                    <button onclick="toggleCompletedVisibility()" class="text-left px-3 py-2 rounded bg-white/5 text-[11px] font-bold hover:bg-white/10">Toggle Completed</button>
-                    <button onclick="toggleRawEdit()" class="text-left px-3 py-2 rounded bg-white/5 text-[11px] font-bold hover:bg-white/10">Raw Editor</button>
-                    <button onclick="hardLogout()" class="text-left px-3 py-2 rounded bg-red-500/5 text-red-400 text-[11px] font-bold mt-2">Logout</button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="toggleHeaderVisibility()" class="text-center py-2 rounded bg-white/5 text-[10px] font-bold border border-white/5">Headers</button>
+                    <button onclick="toggleCompletedVisibility()" class="text-center py-2 rounded bg-white/5 text-[10px] font-bold border border-white/5">Done</button>
+                    <button onclick="toggleRawEdit()" class="text-center py-2 rounded bg-white/5 text-[10px] font-bold border border-white/5">Raw Edit</button>
+                    <button onclick="hardLogout()" class="text-center py-2 rounded bg-red-500/10 text-red-400 text-[10px] font-bold border border-red-500/10">Logout</button>
+                </div>
+                <div class="mt-4">
+                    <select id="sortOrderMobile" onchange="document.getElementById('sortOrder').value = this.value; render();" class="w-full bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-2 text-[10px] font-bold uppercase outline-none">
+                        <option value="file">File Order</option>
+                        <option value="prio">Priority</option>
+                        <option value="due">Due Date</option>
+                    </select>
                 </div>
             </div>
 
-            <button onclick="resetFilters()" class="w-full mb-8 text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
+            <button onclick="resetFilters()" class="w-full mb-8 text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase hover:bg-blue-500/5">Clear Filters</button>
             
             <div class="space-y-8">
                 <div><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Dates</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
@@ -106,15 +120,15 @@
             
             <div class="mt-auto pt-6 border-t border-gray-800 opacity-40">
                 <div id="sidebarOpenTasks" class="text-[9px] font-black uppercase">Tasks: 0</div>
-                <div class="text-[9px] font-black uppercase text-blue-400">v3.6.20</div>
+                <div class="text-[9px] font-black uppercase text-blue-400">v3.6.21</div>
             </div>
         </aside>
         
         <main id="mainContent" class="flex-1 overflow-y-auto p-6 md:p-10" onclick="handleMainClick()">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-6 border rounded-xl resize-none mb-4 outline-none"></textarea>
-                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-4 rounded-xl uppercase text-xs font-black">Save to Dropbox</button>
+                <textarea id="rawEditor" class="flex-1 bg-[#0a0a0a] border border-[#333] font-mono text-sm p-6 rounded-xl resize-none mb-4 outline-none text-gray-300"></textarea>
+                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-4 rounded-xl uppercase text-xs font-black hover:bg-orange-500 transition-colors">Save to Dropbox</button>
             </div>
         </main>
     </div>
@@ -122,7 +136,7 @@
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null, isSyncing = false;
-        let isPinned = localStorage.getItem('sidebar_pinned') !== 'false'; // Default true
+        let isPinned = localStorage.getItem('sidebar_pinned') !== 'false';
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -172,16 +186,14 @@
         function closeSidebar() {
             const side = document.getElementById('sidebar');
             side.classList.remove('mobile-open', 'floating');
-            if (window.innerWidth >= 768 && isPinned) {
-                handlePinToggle();
-            }
+            if (window.innerWidth >= 768 && isPinned) handlePinToggle();
         }
 
         function handleMainClick() {
             if (window.innerWidth < 768) {
                 document.getElementById('sidebar').classList.remove('mobile-open');
             } else if (document.getElementById('sidebar').classList.contains('floating')) {
-                document.getElementById('sidebar').classList.remove('floating', 'mobile-open');
+                document.getElementById('sidebar').classList.remove('floating');
                 document.getElementById('sidebar').classList.add('hidden-desktop');
             }
         }
@@ -237,11 +249,13 @@
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
 
-            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
+            const countText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
+            document.getElementById('viewCounter').innerText = countText;
+            document.getElementById('viewCounterMobile').innerText = countText;
 
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
-                if (editingIndex === item.i) return `<div class="p-3 card-bg border border-blue-500 my-1 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
+                if (editingIndex === item.i) return `<div class="p-3 bg-[#1e1e1e] border border-blue-500 my-1 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
                 
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
@@ -252,7 +266,7 @@
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
 
-                return `<div class="group flex items-center p-3 card-bg ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
+                return `<div class="group flex items-center p-3 bg-[#1e1e1e] ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
                     <button onclick="deleteTask(${item.i})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
@@ -333,13 +347,9 @@
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
                 const prefix = lastWord[0];
                 const tags = [...new Set(allTasks.flatMap(t => t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))].filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
-                if (tags.length) { sugBox.innerHTML = tags.map((t, i) => `<div class="suggestion-item" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
+                if (tags.length) { sugBox.innerHTML = tags.map((t, i) => `<div class="p-2 cursor-pointer border-b border-[#333] hover:bg-blue-600 text-xs" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
             }
             sugBox.classList.add('hidden');
-        }
-
-        function handleInputKeyDown(e) {
-            if (e.key === 'Enter') addTask();
         }
 
         function applySuggestion(tag) {
