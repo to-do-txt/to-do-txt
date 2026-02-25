@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.13</title>
+    <title>to-do-txt v4.1.15</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -17,7 +17,7 @@
         }
         .file-active { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.1); font-weight: 900; color: #3b82f6; }
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
-        .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
+        .h2-style { font-size: 0.9rem; font-800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
@@ -92,7 +92,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.13</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.15</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -131,8 +131,12 @@
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
-            if (token) { dbx = new Dropbox.Dropbox({ accessToken: token }); await loadTasks(); updateFileUI(); setInterval(loadTasks, 30000); } 
-            else { handleAuth(); }
+            if (token) { 
+                dbx = new Dropbox.Dropbox({ accessToken: token }); 
+                await loadTasks(); 
+                updateFileUI(); 
+                setInterval(loadTasks, 30000); 
+            } else { handleAuth(); }
         }
 
         async function loadTasks() {
@@ -144,20 +148,30 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== ""); render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
-                if (e.status === 404 || (e.error && JSON.stringify(e.error).includes("not_found"))) {
+                if (e.status === 401) {
+                    hardLogout();
+                } 
+                else if (e.status === 0 || !navigator.onLine) {
+                    setStatus("Offline", false);
+                    document.getElementById('syncIndicator').className = "w-2 h-2 rounded-full bg-red-500";
+                }
+                else if (e.status === 404 || (e.error && JSON.stringify(e.error).includes("not_found"))) {
                     allTasks = []; render(); await saveTasks();
                 } else { setStatus("Sync Error"); }
             } finally { isSyncing = false; }
         }
 
         async function saveTasks() {
-            if (!dbx) return;
+            if (!dbx || !navigator.onLine) return;
             isSyncing = true; setStatus("Saving...", true);
             try { 
                 const contents = allTasks.length > 0 ? allTasks.join('\n') : " ";
                 await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
                 setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
-            } catch (e) { setStatus("Save Error"); }
+            } catch (e) { 
+                if (e.status === 401) hardLogout();
+                else setStatus("Save Error"); 
+            }
             finally { isSyncing = false; }
         }
 
@@ -293,7 +307,19 @@
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
-        function handleAuth() { const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); const token = urlParams.get('access_token'); if (token) { localStorage.setItem('dbx_token', token); window.location.hash = ""; location.reload(); } else { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; } }
+        
+        function handleAuth() { 
+            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); 
+            const token = urlParams.get('access_token'); 
+            if (token) { 
+                localStorage.setItem('dbx_token', token); 
+                window.location.hash = ""; 
+                location.reload(); 
+            } else { 
+                window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; 
+            } 
+        }
+
         function updateFileUI() { 
             const list = document.getElementById('fileList'); 
             const cleanName = currentFile === '/todo.txt' ? 'todo.txt' : currentFile.replace('/todo_', '').replace('.txt', '');
