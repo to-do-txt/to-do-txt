@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.1</title>
+    <title>to-do-txt v4.1.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -23,8 +23,13 @@
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
-        summary { cursor: pointer; list-style: none; outline: none; }
+        
+        /* Pronounced Collapse Styles */
+        summary { cursor: pointer; list-style: none; outline: none; display: flex; align-items: center; justify-content: space-between; user-select: none; }
         summary::-webkit-details-marker { display: none; }
+        .toggle-icon::before { content: "[+]"; font-family: monospace; font-weight: bold; color: #3b82f6; }
+        details[open] .toggle-icon::before { content: "[-]"; color: #ef4444; }
+        details[open] summary { color: #60a5fa; margin-bottom: 0.5rem; }
     </style>
 </head>
 <body class="font-sans">
@@ -84,36 +89,36 @@
                 </section>
 
                 <details open class="group">
-                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
-                        Specific Dates <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                        Specific Dates <span class="toggle-icon text-[12px]"></span>
                     </summary>
                     <div id="specificDateList" class="space-y-1 text-xs pt-2"></div>
                 </details>
 
                 <details class="group">
-                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
-                        Priorities <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                        Priorities <span class="toggle-icon text-[12px]"></span>
                     </summary>
                     <div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div>
                 </details>
 
                 <details open class="group">
-                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
-                        Projects <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                        Projects <span class="toggle-icon text-[12px]"></span>
                     </summary>
                     <div id="projectList" class="space-y-1 text-xs pt-2"></div>
                 </details>
 
                 <details class="group pb-24">
-                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
-                        Contexts <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                        Contexts <span class="toggle-icon text-[12px]"></span>
                     </summary>
                     <div id="contextList" class="space-y-1 text-xs pt-2"></div>
                 </details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.1</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.2</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -259,7 +264,7 @@
             document.getElementById('activeFileNameDisplay').innerText = cleanName; 
             list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
         }
-        async function switchFile(path) { if (path === currentFile) return; currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; activeFilters.clear(); updateFileUI(); await loadTasks(); }
+        async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; updateFileUI(); await loadTasks(); }
         function createNewFile() { const input = document.getElementById('newFileName'); const rawName = input.value.trim().toUpperCase(); if (!rawName) return; const fullPath = `/todo_${rawName}.txt`; if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); } switchFile(fullPath); }
         function hardLogout() { localStorage.clear(); location.reload(); }
         init();
