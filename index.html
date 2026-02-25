@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.0.5</title>
+    <title>to-do-txt v4.0.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -105,7 +105,7 @@
                     <button onclick="downloadLocalBackup()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.5</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.6</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -299,24 +299,25 @@
                     if (t.meta.isOverdue) counts.OVERDUE++;
                     else if (t.meta.isToday) counts.TODAY++;
                     else if (t.meta.isUpcoming) counts.UPCOMING++;
-                    
                     if (!t.meta.due) counts.NO_DUE++;
                 }
             });
 
-            let dH = '';
-            const addD = (l, k, c) => { 
-                if (counts[k] > 0 || activeFilters.has(k)) { 
-                    dH += `<div onclick="toggleFilter('${k}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(k)?'bg-blue-600/30 font-bold':c} font-bold"><span>${l}</span><span class="opacity-60 font-black">${counts[k]}</span></div>`; 
-                } 
-            };
-            
-            addD('Overdue', 'OVERDUE', 'text-red-500');
-            addD('Today', 'TODAY', 'text-yellow-500');
-            addD('Upcoming', 'UPCOMING', 'text-blue-300');
-            addD('No Due Date', 'NO_DUE', 'text-blue-500');
-            
-            document.getElementById('dateList').innerHTML = dH || '<div class="opacity-30 italic">No matches</div>';
+            // Permanent Date Display
+            const dateCats = [
+                { label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' },
+                { label: 'Today', key: 'TODAY', color: 'text-yellow-500' },
+                { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' },
+                { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }
+            ];
+
+            document.getElementById('dateList').innerHTML = dateCats.map(c => {
+                const isActive = activeFilters.has(c.key);
+                return `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${isActive ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5">
+                    <span>${c.label}</span>
+                    <span class="opacity-60 font-black">${counts[c.key]}</span>
+                </div>`;
+            }).join('');
             
             const updateC = (id, regex, color) => {
                 const c = {};
