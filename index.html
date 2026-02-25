@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.16</title>
+    <title>to-do-txt v3.6.17</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        .app-grid { display: grid; grid-template-columns: 260px 1fr; flex: 1; overflow: hidden; }
+        .app-grid { display: grid; grid-template-columns: 280px 1fr; flex: 1; overflow: hidden; }
         @media (max-width: 768px) { 
             .app-grid { grid-template-columns: 1fr; } 
             .sidebar-hidden { display: none; }
             #sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.5); }
-            .mobile-hide { display: none; }
         }
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
@@ -30,85 +29,90 @@
 </head>
 <body class="font-sans">
 
-    <header class="p-4 card-bg border-b shadow-lg relative z-50">
-        <div class="max-w-6xl mx-auto flex flex-col gap-3">
+    <header class="p-6 card-bg border-b shadow-lg relative z-50">
+        <div class="max-w-6xl mx-auto flex flex-col gap-4">
             <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-4">
                     <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl p-1">☰</button>
-                    <div class="font-bold text-lg text-blue-500 tracking-tighter whitespace-nowrap cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <button onclick="loadTasks()" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded font-bold uppercase mobile-hide">Sync</button>
+                    <div class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
+                    <div class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
+                        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
+                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60">Ready</span>
+                    </div>
                 </div>
                 
-                <div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
-                    <span id="viewCounter" class="text-blue-400 opacity-80 hidden sm:inline">Showing 0/0</span>
-                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded px-1.5 py-0.5 text-[9px] outline-none">
+                <div class="flex items-center gap-4">
+                    <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
+                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-3 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer hover:border-blue-500 transition-colors">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
-                    <div class="hidden md:flex gap-2">
-                        <button onclick="toggleHeaderVisibility()" class="text-green-500">Headers</button>
-                        <button onclick="toggleCompletedVisibility()" class="text-purple-500">Done</button>
-                        <button onclick="toggleRawEdit()" class="text-orange-500">Raw</button>
-                        <button onclick="hardLogout()" class="text-gray-500">Logout</button>
-                    </div>
                 </div>
             </div>
-            <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
-            <div class="relative flex gap-2">
-                <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task..." class="flex-1 input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
-                <button onclick="addTask()" class="bg-blue-600 px-4 py-2 rounded font-bold text-sm text-white">Add</button>
-                <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1"></div>
+            
+            <div class="flex flex-col md:flex-row gap-3">
+                <div class="relative flex-1">
+                    <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="w-full input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                </div>
+                <div class="relative flex-[2] flex gap-2">
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500">Add</button>
+                    <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1"></div>
+                </div>
             </div>
         </div>
     </header>
 
     <div class="app-grid">
-        <aside id="sidebar" class="p-6 border-r overflow-y-auto card-bg sidebar-hidden md:block">
-            <div class="flex justify-between items-center mb-6 md:hidden">
+        <aside id="sidebar" class="p-6 border-r overflow-y-auto card-bg sidebar-hidden md:block flex flex-col">
+            <div class="flex justify-between items-center mb-8 md:hidden">
                 <span class="font-bold text-blue-500">Menu</span>
                 <button onclick="toggleSidebar()" class="text-xl">✕</button>
             </div>
             
-            <div class="mb-8 md:hidden">
-                <h2 class="text-[10px] font-black text-gray-400 mb-4 uppercase tracking-widest">View Options</h2>
-                <div class="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase">
-                    <button onclick="toggleHeaderVisibility()" class="border border-gray-700 p-2 rounded text-green-500">Headers</button>
-                    <button onclick="toggleCompletedVisibility()" class="border border-gray-700 p-2 rounded text-purple-500">Done</button>
-                    <button onclick="toggleRawEdit()" class="border border-gray-700 p-2 rounded text-orange-500">Raw Edit</button>
-                    <button onclick="hardLogout()" class="border border-gray-700 p-2 rounded text-red-500">Logout</button>
+            <div class="mb-8">
+                <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">View Control</h2>
+                <div class="space-y-2">
+                    <button onclick="toggleHeaderVisibility()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-blue-500/10 transition-colors">
+                        <span class="text-green-500 mr-2">●</span> Toggle Headers
+                    </button>
+                    <button onclick="toggleCompletedVisibility()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-blue-500/10 transition-colors">
+                        <span class="text-purple-500 mr-2">●</span> Toggle Completed
+                    </button>
+                    <button onclick="toggleRawEdit()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-blue-500/10 transition-colors">
+                        <span class="text-orange-500 mr-2">●</span> Raw Text Editor
+                    </button>
+                    <button onclick="loadTasks()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-blue-500/10 transition-colors">
+                        <span class="text-blue-400 mr-2">↻</span> Force Sync
+                    </button>
+                    <button onclick="hardLogout()" class="w-full text-left px-3 py-2 rounded bg-red-500/5 border border-red-500/10 text-[11px] font-bold text-red-400 hover:bg-red-500/20 transition-colors">
+                        <span class="mr-2">Logout</span>
+                    </button>
                 </div>
             </div>
 
-            <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded uppercase hover:bg-blue-500/10">Reset All</button>
+            <button onclick="resetFilters()" class="w-full mb-8 text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase hover:bg-blue-500 hover:text-white transition-all">Clear All Filters</button>
+            
             <div class="mb-8"><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Date Filters</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
             <div class="mb-12"><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
             
-            <div class="mt-auto pt-6 border-t border-gray-800 space-y-2 opacity-60">
-                <div class="text-[9px] font-bold uppercase tracking-widest text-gray-500">System Info</div>
-                <div id="sidebarStatus" class="text-[10px] font-mono">Status: Ready</div>
-                <div id="sidebarOpenTasks" class="text-[10px] font-mono">Open: 0</div>
-                <div class="text-[10px] font-mono text-blue-400">Version: 3.6.16</div>
-                <button onclick="loadTasks()" class="md:hidden w-full text-[9px] border border-gray-700 py-1 rounded font-bold uppercase">Manual Sync</button>
+            <div class="mt-auto pt-6 border-t border-gray-800 space-y-1.5 opacity-40">
+                <div id="sidebarOpenTasks" class="text-[9px] font-black uppercase tracking-tighter">Tasks: 0</div>
+                <div class="text-[9px] font-black uppercase tracking-tighter">Build: v3.6.17</div>
             </div>
         </aside>
         
-        <main class="p-6 overflow-y-auto">
+        <main class="p-6 md:p-10 overflow-y-auto">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-4 border rounded resize-none mb-4"></textarea>
-                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-3 rounded uppercase text-xs font-bold">Save RAW File</button>
+                <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-6 border rounded-xl resize-none mb-4 outline-none focus:border-orange-500"></textarea>
+                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-4 rounded-xl uppercase text-xs font-black tracking-widest">Save Changes to Dropbox</button>
             </div>
         </main>
     </div>
-
-    <footer id="status-bar" class="hidden md:flex items-center justify-between px-6 py-2 text-[10px] font-mono text-gray-500 card-bg border-t">
-        <div class="flex items-center gap-3"><div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div><span id="statusText">Ready</span></div>
-        <div class="font-bold tracking-widest opacity-80 text-blue-400">v3.6.16</div>
-        <div id="totalCounter" class="font-bold text-gray-500 uppercase">Open Tasks: 0</div>
-    </footer>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
@@ -132,11 +136,8 @@
         }
 
         function setStatus(text, active = false) {
-            const sText = document.getElementById('statusText');
-            if(sText) sText.innerText = text;
-            document.getElementById('sidebarStatus').innerText = `Status: ${text}`;
-            const indicator = document.getElementById('syncIndicator');
-            if(indicator) indicator.className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
+            document.getElementById('statusText').innerText = text;
+            document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
         }
 
         async function loadTasks() {
@@ -184,11 +185,11 @@
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
 
-            document.getElementById('viewCounter').innerText = `Showing ${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
+            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
 
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
-                if (editingIndex === item.i) return `<div class="p-2 card-bg border border-blue-500 my-1"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
+                if (editingIndex === item.i) return `<div class="p-3 card-bg border border-blue-500 my-1 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
                 
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
@@ -199,10 +200,10 @@
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
 
-                return `<div class="group flex items-center p-2.5 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5">
-                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-3 accent-blue-500 cursor-pointer">
+                return `<div class="group flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r hover:brightness-110">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
-                    <button onclick="deleteTask(${item.i})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
+                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             updateSidebar(displayTasks);
@@ -225,7 +226,7 @@
             const addDateItem = (label, key, color) => {
                 if (counts[key] > 0 || activeFilters.has(key)) {
                     const active = activeFilters.has(key) ? 'bg-blue-600/30 font-bold' : color;
-                    dateHtml += `<div onclick="toggleFilter('${key}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active}"><span>${label}</span><span>${counts[key]}</span></div>`;
+                    dateHtml += `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${label}</span><span class="opacity-60">${counts[key]}</span></div>`;
                 }
             };
             addDateItem('No Due Date', 'NODATE', 'text-gray-500');
@@ -235,26 +236,24 @@
             addDateItem('Next 7 Days', 'UPCOMING', 'text-blue-400');
             Object.keys(specificDates).sort().forEach(d => {
                 const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
-                dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} border-l border-gray-800 ml-2"><span>${d}</span><span class="opacity-50">${specificDates[d]}</span></div>`;
+                dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-2 rounded cursor-pointer ${active} border-l border-gray-800 ml-2 hover:bg-white/5 transition-colors"><span>${d}</span><span class="opacity-40">${specificDates[d]}</span></div>`;
             });
-            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-1 opacity-30 italic">No dates</div>';
+            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-2 opacity-30 italic">No dates</div>';
 
             const updateCat = (id, regex, color) => {
                 const c = {};
                 filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
                 document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
                     const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
-                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} hover:bg-white/5"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
-                }).join('') || '<div class="px-1 opacity-30 italic">Empty</div>';
+                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
+                }).join('') || '<div class="px-2 opacity-30 italic">Empty</div>';
             };
             updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
             updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
             updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
             
             const openCount = allTasks.filter(t => t.trim() !== "" && !t.startsWith('x ') && !t.startsWith('#')).length;
-            const tCounter = document.getElementById('totalCounter');
-            if(tCounter) tCounter.innerText = `Open Tasks: ${openCount}`;
-            document.getElementById('sidebarOpenTasks').innerText = `Open: ${openCount}`;
+            document.getElementById('sidebarOpenTasks').innerText = `Tasks: ${openCount}`;
         }
 
         function getMeta(t) {
