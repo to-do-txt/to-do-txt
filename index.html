@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.25</title>
+    <title>to-do-txt v3.6.26</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -21,8 +21,7 @@
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+        .suggestion-item.active { background-color: #3b82f6; color: white; }
     </style>
 </head>
 <body class="font-sans">
@@ -57,8 +56,9 @@
             <div class="flex flex-col md:flex-row gap-3">
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none">
                 <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" placeholder="Add task (A) @context +project..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none">
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none">
                     <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500">Add</button>
+                    <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1 z-[1001] max-h-60 overflow-y-auto shadow-2xl"></div>
                 </div>
             </div>
         </div>
@@ -70,7 +70,6 @@
                 <span class="font-black text-blue-500 text-xs">FILTERS</span>
                 <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
             </div>
-            
             <div class="flex-1 overflow-y-auto p-6 space-y-8">
                 <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded uppercase">Reset All</button>
                 <div><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase">Date Filters</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
@@ -78,9 +77,8 @@
                 <div><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
                 <div class="pb-24"><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
             </div>
-
             <div class="p-4 border-t border-gray-800 flex justify-between items-center bg-black/10">
-                <span class="text-[9px] font-black uppercase opacity-40">v3.6.25</span>
+                <span class="text-[9px] font-black uppercase opacity-40">v3.6.26</span>
                 <button onclick="hardLogout()" class="text-[9px] text-red-500 uppercase font-black">Logout</button>
             </div>
         </aside>
@@ -106,6 +104,7 @@
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null, isSyncing = false;
+        let suggestionIdx = -1, filteredSuggestions = [];
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -201,12 +200,86 @@
             updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400'); updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400'); updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
         }
 
+        function handleInput(e) {
+            const val = e.target.value;
+            const lastWord = val.split(' ').pop();
+            const sugBox = document.getElementById('suggestions');
+            
+            if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
+                const prefix = lastWord[0];
+                const query = lastWord.slice(1).toLowerCase();
+                const allTags = new Set();
+                allTasks.forEach(t => {
+                    const matches = t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g);
+                    if (matches) matches.forEach(m => allTags.add(m.slice(1)));
+                });
+                
+                filteredSuggestions = Array.from(allTags).filter(t => t.toLowerCase().includes(query)).sort();
+                
+                if (filteredSuggestions.length > 0) {
+                    suggestionIdx = 0;
+                    sugBox.innerHTML = filteredSuggestions.map((s, i) => `<div class="suggestion-item p-3 cursor-pointer text-sm border-b border-white/5 ${i === 0 ? 'active' : ''}" onclick="applySuggestion('${s}')">${prefix}${s}</div>`).join('');
+                    sugBox.classList.remove('hidden');
+                    return;
+                }
+            }
+            sugBox.classList.add('hidden');
+        }
+
+        function applySuggestion(s) {
+            const inp = document.getElementById('newTodo');
+            const words = inp.value.split(' ');
+            const lastWord = words.pop();
+            words.push(lastWord[0] + s);
+            inp.value = words.join(' ') + ' ';
+            document.getElementById('suggestions').classList.add('hidden');
+            inp.focus();
+        }
+
+        function handleInputKeyDown(e) {
+            const sugBox = document.getElementById('suggestions');
+            if (!sugBox.classList.contains('hidden')) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    suggestionIdx = (suggestionIdx + 1) % filteredSuggestions.length;
+                    updateSuggestionHighlight();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    suggestionIdx = (suggestionIdx - 1 + filteredSuggestions.length) % filteredSuggestions.length;
+                    updateSuggestionHighlight();
+                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    applySuggestion(filteredSuggestions[suggestionIdx]);
+                } else if (e.key === 'Escape') {
+                    sugBox.classList.add('hidden');
+                }
+            } else if (e.key === 'Enter') {
+                addTask();
+            }
+        }
+
+        function updateSuggestionHighlight() {
+            const items = document.querySelectorAll('.suggestion-item');
+            items.forEach((item, i) => {
+                if (i === suggestionIdx) item.classList.add('active');
+                else item.classList.remove('active');
+            });
+        }
+
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
         function finishEdit(i, val) { allTasks[i] = val; editingIndex = null; saveTasks(); render(); }
-        function addTask() { const inp = document.getElementById('newTodo'); if(inp.value) { allTasks.push(new Date().toISOString().split('T')[0] + " " + inp.value); inp.value = ""; saveTasks(); render(); } }
+        function addTask() { 
+            const inp = document.getElementById('newTodo'); 
+            if(inp.value) { 
+                allTasks.push(new Date().toISOString().split('T')[0] + " " + inp.value); 
+                inp.value = ""; 
+                saveTasks(); 
+                render(); 
+            } 
+        }
         function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; saveTasks(); render(); }
         function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); saveTasks(); render(); } }
         function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
@@ -214,7 +287,6 @@
         function toggleRawEdit() { document.getElementById('rawEditorContainer').classList.toggle('hidden'); document.getElementById('todoList').classList.toggle('hidden'); document.getElementById('rawEditor').value = allTasks.join('\n'); }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function hardLogout() { localStorage.clear(); location.reload(); }
-        function handleInputKeyDown(e) { if(e.key === 'Enter') addTask(); }
         function handleAuth() {
             const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
             const code = urlParams.get('access_token');
