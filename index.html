@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.0.8</title>
+    <title>to-do-txt v4.1.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -26,6 +26,8 @@
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+        details summary::-webkit-details-marker { display: none; }
+        summary { cursor: pointer; list-style: none; outline: none; }
     </style>
 </head>
 <body class="font-sans">
@@ -49,12 +51,6 @@
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
-                    <div class="hidden md:flex gap-2 text-[10px] font-black uppercase">
-                        <button id="dt-toggle-headers" onclick="toggleHeaderVisibility()" class="px-2 py-1 rounded border border-green-500/40 text-green-500 transition-all">Headers</button>
-                        <button id="dt-toggle-done" onclick="toggleCompletedVisibility()" class="px-2 py-1 rounded border border-purple-500/40 text-purple-500 transition-all">Done</button>
-                        <button id="dt-toggle-raw" onclick="toggleRawEdit()" class="px-2 py-1 rounded border border-orange-500/40 text-orange-500 transition-all">Raw</button>
-                        <button onclick="downloadLocalBackup()" class="px-2 py-1 rounded border border-blue-500/40 text-blue-500 hover:bg-blue-600 hover:text-white transition-all">Backup</button>
-                    </div>
                 </div>
             </div>
             <div class="flex flex-col md:flex-row gap-3">
@@ -74,7 +70,7 @@
                 <span class="font-black text-blue-500 uppercase text-xs tracking-widest">FILES</span>
                 <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
             </div>
-            <div class="flex-1 overflow-y-auto p-6 space-y-8">
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
                 <section>
                     <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">File Manager</h2>
                     <div id="fileList" class="space-y-1 mb-4"></div>
@@ -83,29 +79,49 @@
                         <button onclick="createNewFile()" class="bg-gray-800 px-2 py-1 rounded text-[10px] font-black hover:bg-blue-600 transition-colors">+</button>
                     </div>
                 </section>
+
                 <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
+
                 <section>
-                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Filters</h2>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Dashboard</h2>
                     <div id="dateList" class="space-y-1 text-xs"></div>
                 </section>
-                <section>
-                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
-                    <div id="projectList" class="space-y-1 text-xs"></div>
-                </section>
-                <section class="pb-24">
-                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
-                    <div id="contextList" class="space-y-1 text-xs"></div>
-                </section>
+
+                <details open class="group">
+                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
+                        Specific Dates <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    </summary>
+                    <div id="specificDateList" class="space-y-1 text-xs pt-2"></div>
+                </details>
+
+                <details class="group">
+                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
+                        Priorities <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    </summary>
+                    <div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div>
+                </details>
+
+                <details open class="group">
+                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
+                        Projects <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    </summary>
+                    <div id="projectList" class="space-y-1 text-xs pt-2"></div>
+                </details>
+
+                <details class="group pb-24">
+                    <summary class="flex items-center justify-between text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">
+                        Contexts <span class="group-open:rotate-180 transition-transform text-[8px]">▼</span>
+                    </summary>
+                    <div id="contextList" class="space-y-1 text-xs pt-2"></div>
+                </details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="grid grid-cols-2 gap-2 mb-4 md:hidden">
-                    <button id="mb-toggle-headers" onclick="toggleHeaderVisibility()" class="text-[10px] font-black uppercase py-2 border border-green-500/40 text-green-500 rounded transition-all">Headers</button>
-                    <button id="mb-toggle-done" onclick="toggleCompletedVisibility()" class="text-[10px] font-black uppercase py-2 border border-purple-500/40 text-purple-500 rounded transition-all">Done</button>
-                    <button id="mb-toggle-raw" onclick="toggleRawEdit()" class="text-[10px] font-black uppercase py-2 border border-orange-500/40 text-orange-500 rounded transition-all">Raw Edit</button>
-                    <button onclick="downloadLocalBackup()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
+                    <button onclick="toggleHeaderVisibility()" class="text-[10px] font-black uppercase py-2 border border-green-500/40 text-green-500 rounded">Headers</button>
+                    <button onclick="toggleCompletedVisibility()" class="text-[10px] font-black uppercase py-2 border border-purple-500/40 text-purple-500 rounded">Done</button>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.8</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.0</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -113,10 +129,6 @@
         
         <main class="p-4 md:p-10 overflow-y-auto">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
-            <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-6 border rounded-xl resize-none mb-4 outline-none focus:border-orange-500"></textarea>
-                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-4 rounded-xl uppercase text-xs font-black">Save to Dropbox</button>
-            </div>
         </main>
     </div>
 
@@ -128,13 +140,8 @@
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
-            if (token) { 
-                dbx = new Dropbox.Dropbox({ accessToken: token }); 
-                await loadTasks(); 
-                updateFileUI();
-                setInterval(loadTasks, 30000); 
-            } else { handleAuth(); }
-            updateToggleStyles();
+            if (token) { dbx = new Dropbox.Dropbox({ accessToken: token }); await loadTasks(); updateFileUI(); setInterval(loadTasks, 30000); } 
+            else { handleAuth(); }
         }
 
         async function loadTasks() {
@@ -144,100 +151,18 @@
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
                 const newTasks = text.split('\n').filter(t => t.trim() !== "");
-                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { 
-                    allTasks = newTasks; 
-                    render(); 
-                }
+                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
-            } catch (e) {
-                if (e.status === 404) { await saveTasks(); } 
-                else { setStatus("Sync Error"); }
-            } finally { isSyncing = false; }
+            } catch (e) { setStatus("Sync Error"); }
+            finally { isSyncing = false; }
         }
 
         async function saveTasks() {
             if (!dbx) return;
             isSyncing = true; setStatus("Saving...", true);
-            try { 
-                await dbx.filesUpload({ path: currentFile, contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); 
-                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`);
-            } catch (e) { setStatus("Save Error"); }
+            try { await dbx.filesUpload({ path: currentFile, contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); } 
+            catch (e) { setStatus("Save Error"); }
             finally { isSyncing = false; }
-        }
-
-        function updateFileUI() {
-            const list = document.getElementById('fileList');
-            const display = document.getElementById('activeFileNameDisplay');
-            const cleanName = currentFile.replace('/todo_', '').replace('/todo.txt', 'DEFAULT').replace('.txt', '');
-            display.innerText = cleanName;
-            display.classList.remove('hidden');
-            
-            list.innerHTML = knownFiles.map(f => {
-                const name = f.replace('/todo_', '').replace('/todo.txt', 'DEFAULT').replace('.txt', '');
-                const active = f === currentFile ? 'file-active' : 'text-muted';
-                return `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all flex justify-between items-center ${active} hover:bg-white/5">
-                    <span>${name}</span>
-                    ${f !== '/todo.txt' ? `<span onclick="removeFileFromRegistry(event, '${f}')" class="opacity-30 hover:opacity-100 hover:text-red-500">✕</span>` : ''}
-                </div>`;
-            }).join('');
-        }
-
-        async function switchFile(path) {
-            if (path === currentFile) return;
-            if (isSyncing) return;
-            if (confirm(`Switch to ${path.replace('/','')}?`)) {
-                await saveTasks(); 
-                currentFile = path;
-                localStorage.setItem('last_todo_file', path);
-                allTasks = [];      
-                activeFilters.clear();
-                render();           
-                updateFileUI();
-                await loadTasks();
-            }
-        }
-
-        function createNewFile() {
-            const input = document.getElementById('newFileName');
-            const rawName = input.value.trim().toUpperCase();
-            if (!rawName) return;
-            const fullPath = `/todo_${rawName}.txt`;
-            if (!knownFiles.includes(fullPath)) {
-                knownFiles.push(fullPath);
-                localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles));
-            }
-            input.value = "";
-            switchFile(fullPath);
-        }
-
-        function removeFileFromRegistry(e, path) {
-            e.stopPropagation();
-            if (confirm("Remove project from view? (Dropbox file is safe)")) {
-                knownFiles = knownFiles.filter(f => f !== path);
-                localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles));
-                if (currentFile === path) switchFile('/todo.txt');
-                else updateFileUI();
-            }
-        }
-
-        async function downloadLocalBackup() {
-            if (!dbx) return;
-            setStatus("Exporting...", true);
-            try {
-                const res = await dbx.filesDownload({ path: currentFile });
-                const blob = res.result.fileBlob;
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const ts = new Date().toISOString().replace(/[:.]/g, '-').split('T');
-                const cleanName = currentFile.replace('/','').replace('.txt','');
-                a.href = url;
-                a.download = `${cleanName}-backup-${ts[0]}-${ts[1].substring(0,5)}.txt`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                setStatus("Backup Saved");
-            } catch (e) { setStatus("Backup Failed"); }
         }
 
         function render() {
@@ -256,6 +181,8 @@
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
                 else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
                 else if (f === 'NO_DUE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
+                else if (f.startsWith('DATE:')) displayTasks = displayTasks.filter(t => t.meta.due === f.split(':')[1] || t.meta.isHeader);
+                else if (f.startsWith('PRIO:')) displayTasks = displayTasks.filter(t => t.meta.prio === f.split(':')[1] || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
@@ -266,27 +193,15 @@
             
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
-                if (editingIndex === item.i) return `<div class="p-3 card-bg border border-blue-500 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)"></div>`;
-                
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
-                
-                let html = item.text
-                    .replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => {
-                        const fullUrl = url.startsWith('http') ? url : 'https://' + url;
-                        return `<a href="${fullUrl}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`;
-                    })
-                    .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
-                    .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
-                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
-                
+                let html = item.text.replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`).replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>').replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>').replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
-                    <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
+                    <div class="flex-1 text-[13px] leading-tight">${html}</div>
                     <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
-            
             updateSidebar();
         }
 
@@ -294,7 +209,6 @@
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
             const dateCats = ['OVERDUE', 'TODAY', 'UPCOMING', 'NO_DUE'];
             
-            // Helper to see if a task matches current filters, optionally ignoring a specific set of tags
             const taskMatches = (task, ignoreFilters = []) => {
                 if (task.text.startsWith('x ') || task.meta.isHeader) return false;
                 return Array.from(activeFilters).every(f => {
@@ -303,151 +217,60 @@
                     if (f === 'TODAY') return task.meta.isToday;
                     if (f === 'UPCOMING') return task.meta.isUpcoming;
                     if (f === 'NO_DUE') return !task.meta.due;
+                    if (f.startsWith('DATE:')) return task.meta.due === f.split(':')[1];
+                    if (f.startsWith('PRIO:')) return task.meta.prio === f.split(':')[1];
                     return task.text.includes(f);
                 });
             };
 
-            // 1. Calculate Date Filter counts (constrained by Projects/Contexts)
+            // 1. Date Dashboard
             const dateCounts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
-            tasksWithMeta.forEach(t => {
-                if (taskMatches(t, dateCats)) { // Ignore existing date filters for this count
-                    if (t.meta.isOverdue) dateCounts.OVERDUE++;
-                    else if (t.meta.isToday) dateCounts.TODAY++;
-                    else if (t.meta.isUpcoming) dateCounts.UPCOMING++;
-                    if (!t.meta.due) dateCounts.NO_DUE++;
-                }
-            });
-
-            const dateLabels = [
-                { label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' },
-                { label: 'Today', key: 'TODAY', color: 'text-yellow-500' },
-                { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' },
-                { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }
-            ];
-
-            document.getElementById('dateList').innerHTML = dateLabels.map(c => {
-                const isActive = activeFilters.has(c.key);
-                return `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${isActive ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5">
-                    <span>${c.label}</span>
-                    <span class="opacity-60 font-black">${dateCounts[c.key]}</span>
-                </div>`;
-            }).join('');
+            tasksWithMeta.forEach(t => { if (taskMatches(t, dateCats)) { if (t.meta.isOverdue) dateCounts.OVERDUE++; else if (t.meta.isToday) dateCounts.TODAY++; else if (t.meta.isUpcoming) dateCounts.UPCOMING++; if (!t.meta.due) dateCounts.NO_DUE++; } });
+            const dateLabels = [{ label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' }, { label: 'Today', key: 'TODAY', color: 'text-yellow-500' }, { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }];
+            document.getElementById('dateList').innerHTML = dateLabels.map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
             
-            // 2. Calculate Projects/Contexts (constrained by everything else)
-            const updateTags = (id, regex, color) => {
+            // 2. Specific Dates Section
+            const specificDateMap = {};
+            tasksWithMeta.forEach(t => { if (t.meta.due) { const filterKey = `DATE:${t.meta.due}`; if (taskMatches(t, [filterKey])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
+            document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => {
+                const key = `DATE:${d}`;
+                return `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(key) ? 'font-bold bg-blue-600/30' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`;
+            }).join('') || '<div class="opacity-30 italic">None</div>';
+
+            // 3. Priorities, Projects, Contexts
+            const updateTags = (id, type, regex, color) => {
                 const tagMap = {};
                 tasksWithMeta.forEach(t => { 
-                    // To count tags accurately, we check if the task matches ALL OTHER filters
-                    const tagsInTask = t.text.match(regex) || [];
-                    tagsInTask.forEach(tag => {
-                        if (taskMatches(t, [tag])) { // Ignore the tag itself when checking constraints
-                            tagMap[tag] = (tagMap[tag] || 0) + 1;
-                        }
-                    });
+                    const tags = type === 'PRIO' ? (t.meta.prio ? [`PRIO:${t.meta.prio}`] : []) : (t.text.match(regex) || []);
+                    tags.forEach(tag => { if (taskMatches(t, [tag])) tagMap[tag] = (tagMap[tag] || 0) + 1; });
                 });
-
-                // Display logic: only show tags with count > 0 OR if they are currently active
-                const html = Object.entries(tagMap)
-                    .sort()
-                    .map(([tag, count]) => {
-                        const isActive = activeFilters.has(tag);
-                        return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${isActive ? 'font-bold bg-blue-600/30' : color} hover:bg-white/5">
-                            <span>${tag}</span><span class="opacity-40">${count}</span>
-                        </div>`;
-                    }).join('');
-                
-                document.getElementById(id).innerHTML = html || '<div class="opacity-30 italic">No matches</div>';
+                document.getElementById(id).innerHTML = Object.entries(tagMap).sort().map(([tag, count]) => `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color} hover:bg-white/5"><span>${tag.replace('PRIO:','(').replace(/$/, type==='PRIO'?')':'')}</span><span class="opacity-40">${count}</span></div>`).join('') || '<div class="opacity-30 italic">None</div>';
             };
-            
-            updateTags('projectList', /\+[\w\-]+/g, 'text-blue-400');
-            updateTags('contextList', /@[\w\-]+/g, 'text-green-400');
+            updateTags('priorityFilterList', 'PRIO', null, 'text-orange-400');
+            updateTags('projectList', 'PROJ', /\+[\w\-]+/g, 'text-blue-400');
+            updateTags('contextList', 'CTX', /@[\w\-]+/g, 'text-green-400');
         }
 
         function getMeta(t) {
             const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
             const today = new Date(); today.setHours(0,0,0,0);
             const taskD = d ? new Date(d[1] + 'T00:00:00') : null;
-            return {
-                isHeader: t.startsWith('#'),
-                prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
-                due: d ? d[1] : null,
-                isOverdue: !t.startsWith('x ') && taskD && taskD < today,
-                isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(),
-                isUpcoming: !t.startsWith('x ') && taskD && taskD > today
-            };
+            return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null, due: d ? d[1] : null, isOverdue: !t.startsWith('x ') && taskD && taskD < today, isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(), isUpcoming: !t.startsWith('x ') && taskD && taskD > today };
         }
 
-        function handleInput(e) {
-            const v = e.target.value; const lastWord = v.split(/\s/).pop();
-            const box = document.getElementById('suggestions');
-            if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
-                const tags = [...new Set(allTasks.flatMap(t => t.match(lastWord[0] === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))].filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
-                if (tags.length) { box.innerHTML = tags.map(t => `<div class="p-2 cursor-pointer hover:bg-blue-600" onclick="applySuggestion('${t}')">${t}</div>`).join(''); box.classList.remove('hidden'); return; }
-            } box.classList.add('hidden');
-        }
-        function applySuggestion(tag) { 
-            const inp = document.getElementById('newTodo'); 
-            const words = inp.value.split(' '); words[words.length-1] = tag; 
-            inp.value = words.join(' ') + ' '; 
-            document.getElementById('suggestions').classList.add('hidden');
-            inp.focus(); 
-        }
-        function addTask() { 
-            const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; 
-            let val = inp.value.trim();
-            if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val;
-            allTasks.push(val); inp.value = ""; 
-            document.getElementById('suggestions').classList.add('hidden');
-            render(); saveTasks(); 
-        }
-        function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
-        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
-        function handleAuth() { const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); const token = urlParams.get('access_token'); if (token) { localStorage.setItem('dbx_token', token); window.location.hash = ""; location.reload(); } else { const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; document.body.innerHTML = `<button onclick="window.location.href='${authUrl}'">Connect Dropbox</button>`; } }
-        function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
-        function hardLogout() { localStorage.clear(); location.reload(); }
-        
-        function toggleRawEdit() { 
-            const c = document.getElementById('rawEditorContainer'); 
-            const l = document.getElementById('todoList'); 
-            c.classList.toggle('hidden'); 
-            l.classList.toggle('hidden'); 
-            if (!c.classList.contains('hidden')) document.getElementById('rawEditor').value = allTasks.join('\n'); 
-            updateToggleStyles(); 
-        }
-
-        async function saveRawEdit() { 
-            const rawContent = document.getElementById('rawEditor').value;
-            allTasks = rawContent.split('\n').filter(t => t.trim() !== ""); 
-            isSyncing = true;
-            setStatus(`Saving to ${currentFile.replace('/','')}`, true);
-            try {
-                await dbx.filesUpload({ path: currentFile, contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                setStatus("Raw Save Success");
-                toggleRawEdit();
-                render();
-            } catch (e) {
-                setStatus("Raw Save Error");
-            } finally {
-                isSyncing = false;
-            }
-        }
-
-        function toggleHeaderVisibility() { showHeaders = !showHeaders; render(); updateToggleStyles(); }
-        function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); updateToggleStyles(); }
-        function updateToggleStyles() {
-            const c = [
-                { ids: ['dt-toggle-headers', 'mb-toggle-headers'], active: showHeaders, cls: 'btn-active-green' },
-                { ids: ['dt-toggle-done', 'mb-toggle-done'], active: showCompleted, cls: 'btn-active-purple' },
-                { ids: ['dt-toggle-raw', 'mb-toggle-raw'], active: !document.getElementById('rawEditorContainer').classList.contains('hidden'), cls: 'btn-active-orange' }
-            ];
-            c.forEach(x => x.ids.forEach(id => { const el = document.getElementById(id); if (el) x.active ? el.classList.add(x.cls) : el.classList.remove(x.cls); }));
-        }
-        function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
-        function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
-        function finishEdit(i, val) { if (val.trim()) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
+        function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
+        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
+        function addTask() { const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val; allTasks.push(val); inp.value = ""; render(); saveTasks(); }
+        function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
+        function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
+        function handleAuth() { const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); const token = urlParams.get('access_token'); if (token) { localStorage.setItem('dbx_token', token); window.location.hash = ""; location.reload(); } else { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; } }
+        function updateFileUI() { const list = document.getElementById('fileList'); const cleanName = currentFile.replace('/todo_', '').replace('/todo.txt', 'DEFAULT').replace('.txt', ''); document.getElementById('activeFileNameDisplay').innerText = cleanName; list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted'}">${f.replace('/todo_', '').replace('/todo.txt', 'DEFAULT').replace('.txt', '')}</div>`).join(''); }
+        async function switchFile(path) { if (path === currentFile) return; currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; activeFilters.clear(); updateFileUI(); await loadTasks(); }
+        function createNewFile() { const input = document.getElementById('newFileName'); const rawName = input.value.trim().toUpperCase(); if (!rawName) return; const fullPath = `/todo_${rawName}.txt`; if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); } switchFile(fullPath); }
+        function hardLogout() { localStorage.clear(); location.reload(); }
         init();
     </script>
 </body>
