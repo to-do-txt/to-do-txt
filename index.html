@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.3</title>
+    <title>to-do-txt v4.1.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -23,7 +23,6 @@
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
-        
         summary { cursor: pointer; list-style: none; outline: none; display: flex; align-items: center; justify-content: space-between; user-select: none; }
         summary::-webkit-details-marker { display: none; }
         .toggle-icon::before { content: "[+]"; font-family: monospace; font-weight: bold; color: #3b82f6; font-size: 14px; }
@@ -94,7 +93,7 @@
                     <div id="specificDateList" class="space-y-1 text-xs pt-2"></div>
                 </details>
 
-                <details class="group">
+                <details open class="group">
                     <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
                         Priorities <span class="toggle-icon"></span>
                     </summary>
@@ -108,7 +107,7 @@
                     <div id="projectList" class="space-y-1 text-xs pt-2"></div>
                 </details>
 
-                <details class="group pb-24">
+                <details open class="group pb-24">
                     <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
                         Contexts <span class="toggle-icon"></span>
                     </summary>
@@ -117,7 +116,7 @@
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.3</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.5</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -150,11 +149,16 @@
                 if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
-                if (e.status === 404) {
-                    allTasks = []; // File doesn't exist yet, that's fine for new files
+                // Enhanced Dropbox 404 / Path Not Found check
+                const isNotFound = e.status === 404 || (e.error && e.error.error_summary && e.error.error_summary.includes("path/not_found"));
+                if (isNotFound) {
+                    console.log("File not found on Dropbox. Initializing locally...");
+                    allTasks = []; 
                     render();
-                    setStatus("New File - Local Only");
+                    setStatus("New File - Initializing...");
+                    await saveTasks(); // Force create the file on Dropbox
                 } else {
+                    console.error("Sync Error:", e);
                     setStatus("Sync Error"); 
                 }
             } finally { isSyncing = false; }
@@ -163,8 +167,14 @@
         async function saveTasks() {
             if (!dbx) return;
             isSyncing = true; setStatus("Saving...", true);
-            try { await dbx.filesUpload({ path: currentFile, contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); } 
-            catch (e) { setStatus("Save Error"); }
+            try { 
+                const contents = allTasks.length > 0 ? allTasks.join('\n') : " "; // Save space to ensure file creation
+                await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
+                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
+            } catch (e) { 
+                console.error("Save Error:", e);
+                setStatus("Save Error"); 
+            }
             finally { isSyncing = false; }
         }
 
@@ -216,7 +226,6 @@
                     return task.text.includes(f);
                 });
             };
-
             const dateCounts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
             tasksWithMeta.forEach(t => { if (taskMatches(t, dateCats)) { if (t.meta.isOverdue) dateCounts.OVERDUE++; else if (t.meta.isToday) dateCounts.TODAY++; else if (t.meta.isUpcoming) dateCounts.UPCOMING++; if (!t.meta.due) dateCounts.NO_DUE++; } });
             document.getElementById('dateList').innerHTML = [
@@ -225,14 +234,12 @@
                 { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, 
                 { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }
             ].map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
-            
             const specificDateMap = {};
             tasksWithMeta.forEach(t => { if (t.meta.due) { const key = `DATE:${t.meta.due}`; if (taskMatches(t, [key])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
             document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => {
                 const key = `DATE:${d}`;
                 return `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(key) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`;
             }).join('') || '<div class="opacity-30 italic text-[10px] p-2">No dates found</div>';
-
             const updateTags = (id, type, regex, color) => {
                 const tagMap = {};
                 tasksWithMeta.forEach(t => { 
