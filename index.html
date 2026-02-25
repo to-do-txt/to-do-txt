@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.9-Fixed</title>
+    <title>to-do-txt v4.1.13</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -67,7 +67,7 @@
                 <button onclick="toggleHeaders()" id="toggleHeadBtn" class="btn-toggle active">Headers</button>
                 <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
                 <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
-                <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Export</button>
+                <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Backup</button>
             </div>
         </div>
     </header>
@@ -92,7 +92,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.9-Fixed</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.13</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -189,7 +189,6 @@
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 
-                // INLINE EDIT MODE
                 if (editingIndex === item.i) {
                     return `<div class="p-2 card-bg border-2 border-blue-500 rounded mb-1 flex flex-col gap-2">
                         <input type="text" id="inlineEditInput" class="w-full bg-black text-white p-3 rounded outline-none border border-gray-700" value="${item.text}">
@@ -212,7 +211,6 @@
             updateSidebar();
         }
 
-        // EDITING FUNCTIONS
         function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }, 50); }
         function cancelInlineEdit() { editingIndex = null; render(); }
         function saveInlineEdit(i) { const val = document.getElementById('inlineEditInput').value.trim(); if(val) { allTasks[i] = val; editingIndex = null; render(); saveTasks(); } }
@@ -281,10 +279,15 @@
         function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n').filter(t => t.trim() !== ""); toggleBulkEdit(); saveTasks(); }
         
         function exportFile() {
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
+            const fileName = currentFile.replace('/', '').replace('.txt', '');
+            
             const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = currentFile.replace('/', '');
+            a.href = url; a.download = `${fileName}_${dateStr}_${timeStr}.txt`;
             a.click(); URL.revokeObjectURL(url);
         }
 
