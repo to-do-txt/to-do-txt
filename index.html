@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.11</title>
+    <title>to-do-txt v3.6.12</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -16,6 +16,13 @@
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
+        
+        /* Fixed Sort Visibility */
+        select#sortOrder { background-color: #262626; color: white; border: 1px solid #444; }
+        .light-mode select#sortOrder { background-color: #fff; color: #000; border: 1px solid #ccc; }
+        select#sortOrder option { background-color: #262626; color: white; }
+        .light-mode select#sortOrder option { background-color: #fff; color: #000; }
+
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
         #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto; }
         .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
@@ -37,8 +44,8 @@
                 
                 <div class="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
                     <span id="viewCounter" class="text-blue-400 opacity-80">Showing 0/0</span>
-                    <select id="sortOrder" onchange="render()" class="bg-transparent border border-gray-700 rounded px-1 text-[9px] outline-none">
-                        <option value="file" selected>File Order</option>
+                    <select id="sortOrder" onchange="render()" class="rounded px-2 py-0.5 text-[9px] outline-none cursor-pointer">
+                        <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
@@ -60,7 +67,6 @@
     <div class="app-grid">
         <aside id="sidebar" class="p-6 border-r overflow-y-auto card-bg sidebar-hidden md:block">
             <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded uppercase hover:bg-blue-500/10 transition-all">Reset All</button>
-            
             <div class="mb-8"><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Date Filters</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
@@ -76,10 +82,10 @@
         </main>
     </div>
 
-    <footer id="status-bar" class="flex items-center justify-between px-6 text-[10px] font-mono text-gray-500">
+    <footer id="status-bar" class="flex items-center justify-between px-6 py-2 text-[10px] font-mono text-gray-500 card-bg border-t">
         <div class="flex items-center gap-3"><div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div><span id="statusText">Ready</span></div>
-        <div class="font-bold tracking-widest opacity-50">v3.6.11</div>
-        <div id="totalCounter" class="font-bold text-blue-500 uppercase">Total Lines: 0</div>
+        <div class="font-bold tracking-widest opacity-80 text-blue-400">v3.6.12</div>
+        <div id="totalCounter" class="font-bold text-gray-500 uppercase">Total Lines: 0</div>
     </footer>
 
     <script>
@@ -187,7 +193,6 @@
         function updateSidebar(filtered) {
             const counts = { OVERDUE: 0, TODAY: 0, TOMORROW: 0, UPCOMING: 0 };
             const specificDates = {};
-            
             filtered.forEach(t => {
                 if(!t.text.startsWith('x ') && !t.meta.isHeader) {
                     if (t.meta.isOverdue) counts.OVERDUE++;
@@ -197,7 +202,6 @@
                     if (t.meta.due) specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
                 }
             });
-
             let dateHtml = '';
             const addDateItem = (label, key, color) => {
                 if (counts[key] > 0 || activeFilters.has(key)) {
@@ -209,14 +213,11 @@
             addDateItem('Today', 'TODAY', 'text-yellow-500');
             addDateItem('Tomorrow', 'TOMORROW', 'text-green-400');
             addDateItem('Next 7 Days', 'UPCOMING', 'text-blue-400');
-            
-            // Render specific dates found in view
             Object.keys(specificDates).sort().forEach(d => {
                 const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
                 dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} border-l border-gray-800 ml-2"><span>${d}</span><span class="opacity-50">${specificDates[d]}</span></div>`;
             });
-
-            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-1 opacity-30">No dates</div>';
+            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-1 opacity-30 italic">No dates</div>';
 
             const updateCat = (id, regex, color) => {
                 const c = {};
@@ -224,7 +225,7 @@
                 document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
                     const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
                     return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} hover:bg-white/5"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
-                }).join('') || '<div class="px-1 opacity-30">Empty</div>';
+                }).join('') || '<div class="px-1 opacity-30 italic">Empty</div>';
             };
             updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
             updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
@@ -236,12 +237,10 @@
             const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
             const due = d ? d[1] : null;
             if (!due) return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null };
-            
             const taskDate = new Date(due + 'T00:00:00');
             const today = new Date(); today.setHours(0,0,0,0);
             const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
             const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
-            
             return {
                 isHeader: t.startsWith('#'),
                 prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
