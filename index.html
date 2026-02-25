@@ -3,287 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.32</title>
+    <title>to-do-txt v3.6.23</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        .app-container { display: flex; flex: 1; overflow: hidden; position: relative; }
-        #sidebar { width: 280px; flex-shrink: 0; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: transform 0.2s ease; }
+        
+        /* Desktop Grid */
+        .app-grid { display: grid; grid-template-columns: 280px 1fr; flex: 1; overflow: hidden; }
+        
+        /* Mobile Overlay Sidebar */
         @media (max-width: 768px) { 
-            #sidebar { position: absolute; top: 0; left: 0; bottom: 0; z-index: 1000; transform: translateX(-100%); width: 280px; }
+            .app-grid { grid-template-columns: 1fr; } 
+            #sidebar { 
+                position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000; 
+                width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.8);
+                display: flex; flex-direction: column;
+                transform: translateX(-100%); transition: transform 0.2s ease;
+            }
             #sidebar.sidebar-open { transform: translateX(0); }
-            .content-overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; }
-            .sidebar-open + .content-overlay { display: block; }
         }
+
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
-        .suggestion-item.active { background-color: #3b82f6; color: white; }
+        .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
+        
+        #suggestions { z-index: 2000; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto; }
+        .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+        .suggestion-item:hover, .suggestion-active { background-color: #3b82f6; color: white; }
+
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
     </style>
 </head>
 <body class="font-sans">
 
-    <header class="p-4 md:p-6 card-bg border-b shadow-lg z-50">
-        <div class="max-w-7xl mx-auto flex flex-col gap-4">
+    <header class="p-4 md:p-6 card-bg border-b shadow-lg relative z-50">
+        <div class="max-w-6xl mx-auto flex flex-col gap-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
                     <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl p-1">☰</button>
                     <div class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
                     <div class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
                         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
-                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60">Ready</span>
+                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60 text-gray-400">Ready</span>
                     </div>
                 </div>
-                <div class="flex items-center gap-3 md:gap-6">
+                <div class="flex items-center gap-4">
                     <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
-                    <div class="hidden md:flex gap-4 text-[10px] font-black uppercase tracking-widest">
-                        <button onclick="toggleHeaderVisibility()" class="text-green-500">Headers</button>
-                        <button onclick="toggleCompletedVisibility()" class="text-purple-500">Done</button>
-                        <button onclick="toggleRawEdit()" class="text-orange-500">Raw</button>
-                    </div>
-                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-1 text-[10px] font-bold uppercase">
+                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-3 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
+                    <div class="hidden md:flex gap-4 text-[10px] font-black uppercase tracking-widest">
+                        <button onclick="toggleHeaderVisibility()" class="text-green-500 hover:opacity-70">Headers</button>
+                        <button onclick="toggleCompletedVisibility()" class="text-purple-500 hover:opacity-70">Done</button>
+                        <button onclick="toggleRawEdit()" class="text-orange-500 hover:opacity-70">Raw</button>
+                        <button onclick="hardLogout()" class="text-gray-500 hover:text-red-500">Logout</button>
+                    </div>
                 </div>
             </div>
+            
             <div class="flex flex-col md:flex-row gap-3">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none">
-                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500">Add</button>
-                    <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1 z-[1001] max-h-60 overflow-y-auto shadow-2xl"></div>
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500 transition-colors">Add</button>
+                    <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1"></div>
                 </div>
             </div>
         </div>
     </header>
 
-    <div class="app-container">
-        <aside id="sidebar">
-            <div class="p-4 border-b border-gray-800 space-y-3">
-                <div class="flex justify-between items-center md:hidden">
-                    <span class="font-black text-blue-500 text-[10px] tracking-widest">FILTERS</span>
-                    <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
-                </div>
-                <div class="flex gap-2">
-                    <button id="logoutBtn" onclick="safeLogout()" class="flex-1 bg-red-900/20 text-red-500 text-[10px] font-black py-2 rounded uppercase border border-red-500/20 transition-all">Logout</button>
-                    <button onclick="resetFilters()" class="flex-[2] bg-blue-900/20 text-blue-500 text-[10px] font-black py-2 rounded uppercase border border-blue-500/20">Clear Filters</button>
-                </div>
+    <div class="app-grid">
+        <aside id="sidebar" class="card-bg border-r overflow-hidden flex flex-col">
+            <div class="p-6 flex justify-between items-center md:hidden border-b border-gray-800">
+                <span class="font-black text-blue-500 uppercase text-xs tracking-widest">Filter Menu</span>
+                <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
             </div>
+            
             <div class="flex-1 overflow-y-auto p-6 space-y-8">
-                <div><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Date Filters</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
-                <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
-                <div><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
-                <div class="pb-10"><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
+                <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase hover:bg-blue-500/10 transition-colors">Clear Filters</button>
+                
+                <section>
+                    <h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Date Filters</h2>
+                    <div id="dateList" class="space-y-1 text-xs"></div>
+                </section>
+                
+                <section>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2>
+                    <div id="priorityList" class="space-y-1 text-xs"></div>
+                </section>
+                
+                <section>
+                    <h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2>
+                    <div id="projectList" class="space-y-1 text-xs"></div>
+                </section>
+                
+                <section class="pb-24">
+                    <h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2>
+                    <div id="contextList" class="space-y-1 text-xs"></div>
+                </section>
             </div>
-            <div class="p-4 border-t border-gray-800 bg-black/10">
-                <span class="text-[9px] font-black uppercase opacity-40">v3.6.32</span>
+
+            <div class="p-6 border-t border-gray-800 bg-black/20">
+                <div class="grid grid-cols-3 gap-2 mb-6 md:hidden">
+                    <button onclick="toggleHeaderVisibility()" class="text-[10px] font-black uppercase py-2 bg-green-500/10 text-green-500 border border-green-500/40 rounded shadow-sm active:bg-green-500 active:text-black">Headers</button>
+                    <button onclick="toggleCompletedVisibility()" class="text-[10px] font-black uppercase py-2 bg-purple-500/10 text-purple-500 border border-purple-500/40 rounded shadow-sm active:bg-purple-500 active:text-black">Done</button>
+                    <button onclick="toggleRawEdit()" class="text-[10px] font-black uppercase py-2 bg-orange-500/10 text-orange-500 border border-orange-500/40 rounded shadow-sm active:bg-orange-500 active:text-black">Raw</button>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                    <div class="flex flex-col">
+                        <span class="text-[9px] font-black uppercase text-blue-500/60">v3.6.23</span>
+                        <span class="text-[8px] font-bold uppercase text-gray-600">File Order On</span>
+                    </div>
+                    <button onclick="hardLogout()" class="px-4 py-2 border border-red-900/50 bg-red-950/20 text-red-500 text-[10px] font-black uppercase rounded hover:bg-red-500 hover:text-white transition-all">Logout</button>
+                </div>
             </div>
         </aside>
-
-        <div class="content-overlay" onclick="toggleSidebar()"></div>
-
-        <main class="flex-1 overflow-y-auto p-4 md:p-10">
+        
+        <main class="p-4 md:p-10 overflow-y-auto">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
-                <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-6 border rounded-xl resize-none mb-4 outline-none"></textarea>
-                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-4 rounded-xl uppercase text-xs font-black">Save to Dropbox</button>
+                <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-6 border rounded-xl resize-none mb-4 outline-none focus:border-orange-500"></textarea>
+                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-4 rounded-xl uppercase text-xs font-black hover:bg-orange-500 transition-colors">Save to Dropbox</button>
             </div>
         </main>
     </div>
 
-    <footer class="p-2 card-bg border-t border-gray-800 text-center relative z-50">
-        <div class="flex justify-between max-w-7xl mx-auto px-4">
-            <span id="footerSync" class="text-[9px] font-bold uppercase opacity-40">Not Synced</span>
-            <span id="lineCounter" class="text-[9px] font-bold uppercase opacity-40">Total Lines: 0</span>
-        </div>
-    </footer>
-
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null, isSyncing = false;
-        let suggestionIdx = -1, filteredSuggestions = [], logoutTimer = null;
+        let suggestionIdx = -1;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
-            if (token) { dbx = new Dropbox.Dropbox({ accessToken: token }); await loadTasks(); setInterval(loadTasks, 30000); }
-            else { handleAuth(); }
+            if (token) { 
+                dbx = new Dropbox.Dropbox({ accessToken: token }); 
+                await loadTasks(); 
+                setInterval(loadTasks, 30000); 
+            } else { handleAuth(); }
         }
 
-        function safeLogout() {
-            const btn = document.getElementById('logoutBtn');
-            if (btn.innerText === "LOGOUT") {
-                btn.innerText = "SURE?"; btn.classList.add('bg-red-600', 'text-white');
-                logoutTimer = setTimeout(() => { btn.innerText = "LOGOUT"; btn.classList.remove('bg-red-600', 'text-white'); }, 3000);
-            } else { localStorage.clear(); location.reload(); }
-        }
-
-        function setStatus(text, colorClass) {
-            document.getElementById('statusText').innerText = text;
-            document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${colorClass}`;
-            document.getElementById('footerSync').innerText = `Synced ${new Date().toLocaleTimeString([], {hour12:false})}`;
-        }
-
-        async function loadTasks() {
-            if (!dbx || isSyncing || editingIndex !== null) return;
-            isSyncing = true; setStatus("Syncing", "bg-blue-500 animate-pulse");
-            try {
-                const res = await dbx.filesDownload({ path: '/todo.txt' });
-                const text = await res.result.fileBlob.text();
-                const newTasks = text.split('\n').filter(t => t.trim() !== "");
-                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
-                setStatus("Ready", "bg-green-500");
-            } catch (e) { setStatus("Error", "bg-red-500"); }
-            finally { isSyncing = false; }
-        }
-
-        async function saveTasks() {
-            if (!dbx) return;
-            try { 
-                await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-                await dbx.filesUpload({ path: '/todo.backup.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} });
-            } catch (e) {}
-        }
-
-        function getMeta(t) {
-            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
-            const due = d ? d[1] : null;
-            const taskDate = due ? new Date(due + 'T00:00:00') : null;
-            const today = new Date(); today.setHours(0,0,0,0);
-            return {
-                isHeader: t.startsWith('#'),
-                prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
-                due,
-                isOverdue: !t.startsWith('x ') && taskDate && taskDate < today,
-                isToday: !t.startsWith('x ') && taskDate && taskDate.getTime() === today.getTime(),
-                isFuture: !t.startsWith('x ') && taskDate && taskDate > today
-            };
-        }
-
-        function render() {
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const sortVal = document.getElementById('sortOrder').value;
-            let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
-            if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
-            if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
-            if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
-            activeFilters.forEach(f => {
-                if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
-                else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
-                else if (f === 'FUTURE') displayTasks = displayTasks.filter(t => t.meta.isFuture || t.meta.isHeader);
-                else if (f === 'NODATE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
-                else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
-            });
-
-            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
-            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
-
-            document.getElementById('viewCounter').innerText = `SHOWING ${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
-            document.getElementById('lineCounter').innerText = `TOTAL LINES: ${allTasks.length}`;
-
-            document.getElementById('todoList').innerHTML = displayTasks.map(item => {
-                if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
-                if (editingIndex === item.i) return `<div class="p-3 card-bg border border-blue-500 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)"></div>`;
-                const isDone = item.text.startsWith('x ');
-                let html = item.text
-                    .replace(/^\(([A-Z])\)/, '<span class="text-orange-400 font-bold">($1)</span>')
-                    .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
-                    .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
-                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'}">$&</span>`)
-                    .replace(/link:(\S+)/g, '<a href="https://$1" target="_blank" class="text-blue-400 underline ml-1">link ↗</a>');
-                return `<div class="group flex items-center p-3 card-bg border-l-4 ${item.meta.prio === 'A' ? 'border-orange-500' : 'border-blue-500'} ${isDone ? 'opacity-30' : ''} mb-0.5"><input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="mr-4"><div class="flex-1 text-[13px]" onclick="startEdit(${item.i})">${html}</div><button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 px-2">✕</button></div>`;
-            }).join('');
-            updateSidebar(displayTasks);
-        }
-
-        function updateSidebar(filtered) {
-            const counts = { OVERDUE: 0, TODAY: 0, FUTURE: 0, NODATE: 0 };
-            const futureDates = {};
-            
-            filtered.forEach(t => { 
-                if(!t.text.startsWith('x ') && !t.meta.isHeader) { 
-                    if (t.meta.isOverdue) counts.OVERDUE++; 
-                    if (t.meta.isToday) counts.TODAY++; 
-                    if (t.meta.isFuture) {
-                        counts.FUTURE++;
-                        futureDates[t.meta.due] = (futureDates[t.meta.due] || 0) + 1;
-                    }
-                    if (!t.meta.due) counts.NODATE++; 
-                } 
-            });
-
-            const renderDate = (label, key, color) => `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(key) ? 'bg-blue-600/30' : color}"><span>${label}</span><span>${counts[key]}</span></div>`;
-            
-            let dateHtml = renderDate('Overdue', 'OVERDUE', 'text-red-500') + 
-                           renderDate('Today', 'TODAY', 'text-yellow-500') + 
-                           renderDate('Future', 'FUTURE', 'text-blue-400');
-            
-            Object.keys(futureDates).sort().forEach(date => {
-                dateHtml += `<div onclick="toggleFilter('${date}')" class="flex justify-between p-2 pl-6 rounded cursor-pointer text-[10px] opacity-70 ${activeFilters.has(date) ? 'bg-blue-600/30' : 'text-blue-300'}"><span>${date}</span><span>${futureDates[date]}</span></div>`;
-            });
-
-            dateHtml += renderDate('No Due Date', 'NODATE', 'text-gray-500');
-
-            document.getElementById('dateList').innerHTML = dateHtml;
-
-            const updateCat = (id, regex, color) => {
-                const c = {}; filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
-                document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(tag) ? 'bg-blue-600/30' : color}"><span>${tag}</span><span class="opacity-40">${count}</span></div>`).join('') || 'None';
-            };
-            updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400'); updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400'); updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
-        }
-
-        function handleInput(e) {
-            const val = e.target.value; const words = val.split(' '); const lastWord = words.pop(); const sugBox = document.getElementById('suggestions');
-            if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
-                const prefix = lastWord[0]; const query = lastWord.slice(1).toLowerCase(); const allTags = new Set();
-                allTasks.forEach(t => { const matches = t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g); if (matches) matches.forEach(m => allTags.add(m.slice(1))); });
-                filteredSuggestions = Array.from(allTags).filter(t => t.toLowerCase().includes(query)).sort();
-                if (filteredSuggestions.length > 0) {
-                    suggestionIdx = 0; sugBox.innerHTML = filteredSuggestions.map((s, i) => `<div class="suggestion-item p-3 cursor-pointer text-sm border-b border-white/5 ${i === 0 ? 'active' : ''}" onclick="applySuggestion('${s}')">${prefix}${s}</div>`).join('');
-                    sugBox.classList.remove('hidden'); return;
-                }
-            }
-            sugBox.classList.add('hidden');
-        }
-
-        function applySuggestion(s) {
-            const inp = document.getElementById('newTodo'); const words = inp.value.split(' '); const lastWord = words.pop();
-            words.push(lastWord[0] + s); inp.value = words.join(' ') + ' '; document.getElementById('suggestions').classList.add('hidden'); inp.focus();
-        }
-
-        function handleInputKeyDown(e) {
-            const sugBox = document.getElementById('suggestions');
-            if (!sugBox.classList.contains('hidden')) {
-                if (e.key === 'ArrowDown') { e.preventDefault(); suggestionIdx = (suggestionIdx + 1) % filteredSuggestions.length; updateSuggestionHighlight(); }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); suggestionIdx = (suggestionIdx - 1 + filteredSuggestions.length) % filteredSuggestions.length; updateSuggestionHighlight(); }
-                else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applySuggestion(filteredSuggestions[suggestionIdx]); }
-            } else if (e.key === 'Enter') { addTask(); }
-        }
-
-        function updateSuggestionHighlight() {
-            const items = document.querySelectorAll('.suggestion-item');
-            items.forEach((item, i) => i === suggestionIdx ? item.classList.add('active') : item.classList.remove('active'));
-        }
-
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
-        function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
-        function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
-        function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
-        function finishEdit(i, val) { allTasks[i] = val; editingIndex = null; saveTasks(); render(); }
-        function addTask() { const inp = document.getElementById('newTodo'); if(inp.value) { allTasks.push(new Date().toISOString().split('T')[0] + " " + inp.value); inp.value = ""; saveTasks(); render(); } }
-        function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; saveTasks(); render(); }
-        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); saveTasks(); render(); } }
-        function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
-        function toggleHeaderVisibility() { showHeaders = !showHeaders; render(); }
-        function toggleRawEdit() { document.getElementById('rawEditorContainer').classList.toggle('hidden'); document.getElementById('todoList').classList.toggle('hidden'); document.getElementById('rawEditor').value = allTasks.join('\n'); }
-        function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function handleAuth() {
             const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
             const code = urlParams.get('access_token');
@@ -293,7 +159,128 @@
                 document.body.innerHTML = `<div class="h-screen flex items-center justify-center"><button onclick="window.location.href='${authUrl}'" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-xl">Connect to Dropbox</button></div>`;
             }
         }
-        init();
-    </script>
-</body>
-</html>
+
+        function setStatus(text, active = false) {
+            document.getElementById('statusText').innerText = text;
+            document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
+        }
+
+        async function loadTasks() {
+            if (!dbx || isSyncing || editingIndex !== null) return;
+            isSyncing = true; setStatus("Syncing...", true);
+            try {
+                const res = await dbx.filesDownload({ path: '/todo.txt' });
+                const text = await res.result.fileBlob.text();
+                const newTasks = text.split('\n').filter(t => t.trim() !== "");
+                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
+                setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
+            } catch (e) { setStatus("Sync Error"); }
+            finally { isSyncing = false; }
+        }
+
+        async function saveTasks() {
+            if (!dbx) return;
+            isSyncing = true; setStatus("Saving...", true);
+            try { 
+                await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); 
+                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`);
+            } catch (e) { setStatus("Save Error"); }
+            finally { isSyncing = false; }
+        }
+
+        function render() {
+            const list = document.getElementById('todoList');
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const sortVal = document.getElementById('sortOrder').value;
+            
+            let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
+            if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
+            if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+            
+            activeFilters.forEach(f => {
+                if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
+                else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
+                else if (f === 'TOMORROW') displayTasks = displayTasks.filter(t => t.meta.isTomorrow || t.meta.isHeader);
+                else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
+                else if (f === 'NODATE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
+                else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
+            });
+
+            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
+            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+
+            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
+
+            list.innerHTML = displayTasks.map(item => {
+                if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
+                if (editingIndex === item.i) return `<div class="p-3 card-bg border border-blue-500 my-1 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
+                
+                const isDone = item.text.startsWith('x ');
+                const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
+                let html = item.text
+                    .replace(/link:(https?:\/\/[^\s]+|www\.[^\s]+)/g, (m, u) => `<a href="${u.startsWith('http')?u:'https://'+u}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`)
+                    .replace(/^\(([A-Z])\)/, '<span class="text-orange-400 font-bold">($1)</span>')
+                    .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
+                    .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
+                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
+
+                return `<div class="group flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
+                    <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
+                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
+                </div>`;
+            }).join('');
+            updateSidebar(displayTasks);
+        }
+
+        function updateSidebar(filtered) {
+            const counts = { OVERDUE: 0, TODAY: 0, TOMORROW: 0, UPCOMING: 0, NODATE: 0 };
+            const specificDates = {};
+            filtered.forEach(t => {
+                if(!t.text.startsWith('x ') && !t.meta.isHeader) {
+                    if (t.meta.isOverdue) counts.OVERDUE++;
+                    if (t.meta.isToday) counts.TODAY++;
+                    if (t.meta.isTomorrow) counts.TOMORROW++;
+                    if (t.meta.isUpcoming) counts.UPCOMING++;
+                    if (!t.meta.due) counts.NODATE++;
+                    if (t.meta.due) specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
+                }
+            });
+            let dateHtml = '';
+            const addDateItem = (label, key, color) => {
+                if (counts[key] > 0 || activeFilters.has(key)) {
+                    const active = activeFilters.has(key) ? 'bg-blue-600/30 font-bold' : color;
+                    dateHtml += `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${label}</span><span class="opacity-60">${counts[key]}</span></div>`;
+                }
+            };
+            addDateItem('No Due Date', 'NODATE', 'text-gray-500');
+            addDateItem('Overdue', 'OVERDUE', 'text-red-500');
+            addDateItem('Today', 'TODAY', 'text-yellow-500');
+            addDateItem('Tomorrow', 'TOMORROW', 'text-green-400');
+            addDateItem('Next 7 Days', 'UPCOMING', 'text-blue-400');
+            Object.keys(specificDates).sort().forEach(d => {
+                const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
+                dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-2 rounded cursor-pointer ${active} border-l border-gray-800 ml-2 hover:bg-white/5 transition-colors"><span>${d}</span><span class="opacity-40">${specificDates[d]}</span></div>`;
+            });
+            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-2 opacity-30 italic">No dates</div>';
+
+            const updateCat = (id, regex, color) => {
+                const c = {};
+                filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
+                document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
+                    const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
+                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
+                }).join('') || '<div class="px-2 opacity-30 italic">Empty</div>';
+            };
+            updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
+            updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
+            updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
+        }
+
+        function getMeta(t) {
+            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
+            const due = d ? d[1] : null;
+            if (!due) return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null };
+            const taskDate = new Date(due + 'T00:00:00');
+            const today
