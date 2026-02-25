@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.5</title>
+    <title>to-do-txt v3.6.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -42,7 +42,7 @@
                 <div class="flex items-center gap-3">
                     <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl">☰</button>
                     <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase">Force Sync</button>
+                    <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase">Sync Now</button>
                 </div>
                 
                 <div class="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
@@ -66,7 +66,7 @@
 
     <div class="app-grid">
         <aside id="sidebar" class="p-6 border-r overflow-y-auto card-bg sidebar-hidden md:block">
-            <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded hover:bg-blue-500/10 uppercase">Reset All View</button>
+            <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded hover:bg-blue-500/10 uppercase">Reset Filters</button>
             
             <div id="pdCont" class="mb-8 hidden">
                 <h2 class="text-[10px] font-black text-red-500 mb-4 uppercase tracking-widest">Past Due</h2>
@@ -91,7 +91,7 @@
             <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
             <span id="statusText">Ready</span>
         </div>
-        <div class="font-bold tracking-widest opacity-50">VERSION 3.6.5</div>
+        <div class="font-bold tracking-widest opacity-50">VERSION 3.6.6</div>
         <div id="totalCounter" class="font-bold text-blue-500">OPEN TASKS: 0</div>
     </footer>
 
@@ -151,7 +151,7 @@
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
             
-            // 1. FILTER ENGINE (STRICT INTERSECTION)
+            // 1. Strict Filtering Intersection
             let filteredTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
 
             if (!showCompleted) filteredTasks = filteredTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
@@ -163,7 +163,7 @@
                 else filteredTasks = filteredTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            // 2. RENDER MAIN UI
+            // 2. Render Main List
             list.innerHTML = filteredTasks.map(item => {
                 if (item.meta.isHeader) {
                     const level = item.text.match(/^#+/)[0].length;
@@ -195,7 +195,7 @@
         function updateSidebarConstraints(filteredTasks) {
             const updateCategory = (id, regex, color) => {
                 const counts = {};
-                // Only count tags found in tasks that survived ALL current filters
+                // Only count tags within the current view
                 filteredTasks.forEach(t => { 
                     if(!t.text.startsWith('x ') && !t.meta.isHeader) {
                         (t.text.match(regex) || []).forEach(tag => counts[tag] = (counts[tag] || 0) + 1);
@@ -214,12 +214,18 @@
             updateCategory('projectList', /\+[\w\-]+/g, 'text-blue-400');
             updateCategory('contextList', /@[\w\-]+/g, 'text-green-400');
 
-            const odTasks = filteredTasks.filter(t => t.meta.isOverdue).length;
+            // Handle Overdue specifically within the intersection
+            const overdueInView = filteredTasks.filter(t => t.meta.isOverdue).length;
             const odCont = document.getElementById('pdCont');
-            if (odTasks > 0) {
+            
+            // We show the Overdue sidebar item if there are EITHER overdue tasks in view, OR if the overdue filter is currently active
+            if (overdueInView > 0 || activeFilters.has('OVERDUE')) {
                 odCont.classList.remove('hidden');
-                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('OVERDUE')" class="flex justify-between p-1.5 rounded cursor-pointer ${activeFilters.has('OVERDUE') ? 'text-white bg-red-600/20 font-bold' : 'text-red-400'}"><span>Overdue</span><span>${odTasks}</span></div>`;
-            } else odCont.classList.add('hidden');
+                const active = activeFilters.has('OVERDUE') ? 'text-white bg-red-600/20 font-bold' : 'text-red-400';
+                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('OVERDUE')" class="flex justify-between p-1.5 rounded cursor-pointer ${active}"><span>Overdue</span><span>${overdueInView}</span></div>`;
+            } else {
+                odCont.classList.add('hidden');
+            }
 
             document.getElementById('totalCounter').innerText = `OPEN TASKS: ${allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#')).length}`;
         }
@@ -234,7 +240,8 @@
         function handleInput(e) {
             const val = e.target.value;
             const cursor = e.target.selectionStart;
-            const lastWord = val.slice(0, cursor).split(/\s/).pop();
+            const words = val.slice(0, cursor).split(/\s/);
+            const lastWord = words[words.length - 1];
             const sugBox = document.getElementById('suggestions');
 
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
