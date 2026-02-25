@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.5</title>
+    <title>to-do-txt v4.1.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -74,7 +74,7 @@
                     <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">File Manager</h2>
                     <div id="fileList" class="space-y-1 mb-4"></div>
                     <div class="flex gap-2">
-                        <input type="text" id="newFileName" placeholder="NEW PROJECT..." class="flex-1 bg-black/40 border border-gray-800 rounded px-2 py-1 text-[10px] outline-none focus:border-blue-500 uppercase">
+                        <input type="text" id="newFileName" maxlength="20" placeholder="NEW PROJECT..." class="flex-1 bg-black/40 border border-gray-800 rounded px-2 py-1 text-[10px] outline-none focus:border-blue-500 uppercase">
                         <button onclick="createNewFile()" class="bg-gray-800 px-2 py-1 rounded text-[10px] font-black hover:bg-blue-600 transition-colors">+</button>
                     </div>
                 </section>
@@ -116,7 +116,7 @@
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.5</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.7</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -149,18 +149,12 @@
                 if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
-                // Enhanced Dropbox 404 / Path Not Found check
                 const isNotFound = e.status === 404 || (e.error && e.error.error_summary && e.error.error_summary.includes("path/not_found"));
                 if (isNotFound) {
-                    console.log("File not found on Dropbox. Initializing locally...");
-                    allTasks = []; 
-                    render();
+                    allTasks = []; render();
                     setStatus("New File - Initializing...");
-                    await saveTasks(); // Force create the file on Dropbox
-                } else {
-                    console.error("Sync Error:", e);
-                    setStatus("Sync Error"); 
-                }
+                    await saveTasks();
+                } else { setStatus("Sync Error"); }
             } finally { isSyncing = false; }
         }
 
@@ -168,13 +162,10 @@
             if (!dbx) return;
             isSyncing = true; setStatus("Saving...", true);
             try { 
-                const contents = allTasks.length > 0 ? allTasks.join('\n') : " "; // Save space to ensure file creation
+                const contents = allTasks.length > 0 ? allTasks.join('\n') : " ";
                 await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
                 setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
-            } catch (e) { 
-                console.error("Save Error:", e);
-                setStatus("Save Error"); 
-            }
+            } catch (e) { setStatus("Save Error"); }
             finally { isSyncing = false; }
         }
 
@@ -273,10 +264,31 @@
             const list = document.getElementById('fileList'); 
             const cleanName = currentFile === '/todo.txt' ? 'todo.txt' : currentFile.replace('/todo_', '').replace('.txt', '');
             document.getElementById('activeFileNameDisplay').innerText = cleanName; 
-            list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
+            list.innerHTML = knownFiles.map(f => `
+                <div class="flex items-center group relative">
+                    <div onclick="switchFile('${f}')" class="flex-1 p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted hover:bg-white/5'}">
+                        ${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}
+                    </div>
+                    ${f !== '/todo.txt' ? `<button onclick="removeFileFromList('${f}')" class="absolute right-2 text-gray-700 hover:text-red-500 text-[10px] font-bold p-1">✕</button>` : ''}
+                </div>`).join(''); 
         }
+        function removeFileFromList(path) { if (confirm(`Remove "${path}" from your sidebar list? (The file will stay on Dropbox)`)) { knownFiles = knownFiles.filter(f => f !== path); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); if (currentFile === path) switchFile('/todo.txt'); else updateFileUI(); } }
         async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; updateFileUI(); await loadTasks(); }
-        function createNewFile() { const input = document.getElementById('newFileName'); const rawName = input.value.trim().toUpperCase(); if (!rawName) return; const fullPath = `/todo_${rawName}.txt`; if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); } switchFile(fullPath); input.value = ""; }
+        
+        function createNewFile() { 
+            const input = document.getElementById('newFileName');
+            // Sanitize: allow only A-Z, 0-9, and underscores. Limit to 20 chars.
+            const rawName = input.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').substring(0, 20);
+            if (!rawName) return; 
+            const fullPath = `/todo_${rawName}.txt`; 
+            if (!knownFiles.includes(fullPath)) { 
+                knownFiles.push(fullPath); 
+                localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); 
+            } 
+            switchFile(fullPath); 
+            input.value = ""; 
+        }
+
         function hardLogout() { localStorage.clear(); location.reload(); }
         init();
     </script>
