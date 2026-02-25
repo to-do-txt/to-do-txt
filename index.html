@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.0.4</title>
+    <title>to-do-txt v4.0.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -105,7 +105,7 @@
                     <button onclick="downloadLocalBackup()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.4</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.5</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -254,6 +254,7 @@
             activeFilters.forEach(f => {
                 if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
+                else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
                 else if (f === 'NO_DUE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
@@ -277,7 +278,7 @@
                     })
                     .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
-                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
+                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
                 
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
@@ -291,12 +292,13 @@
 
         function updateSidebar() {
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
-            const counts = { OVERDUE: 0, TODAY: 0, NO_DUE: 0 };
+            const counts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
             
             tasksWithMeta.forEach(t => {
                 if(!t.text.startsWith('x ') && !t.meta.isHeader) {
                     if (t.meta.isOverdue) counts.OVERDUE++;
                     else if (t.meta.isToday) counts.TODAY++;
+                    else if (t.meta.isUpcoming) counts.UPCOMING++;
                     
                     if (!t.meta.due) counts.NO_DUE++;
                 }
@@ -311,7 +313,8 @@
             
             addD('Overdue', 'OVERDUE', 'text-red-500');
             addD('Today', 'TODAY', 'text-yellow-500');
-            addD('No Due Date', 'NO_DUE', 'text-blue-400');
+            addD('Upcoming', 'UPCOMING', 'text-blue-300');
+            addD('No Due Date', 'NO_DUE', 'text-blue-500');
             
             document.getElementById('dateList').innerHTML = dH || '<div class="opacity-30 italic">No matches</div>';
             
@@ -338,7 +341,8 @@
                 prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
                 due: d ? d[1] : null,
                 isOverdue: !t.startsWith('x ') && taskD && taskD < today,
-                isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime()
+                isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(),
+                isUpcoming: !t.startsWith('x ') && taskD && taskD > today
             };
         }
 
