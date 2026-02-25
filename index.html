@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.0</title>
+    <title>to-do-txt v4.1.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -15,9 +15,6 @@
             #sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000; width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; transform: translateX(-100%); transition: transform 0.2s ease; }
             #sidebar.sidebar-open { transform: translateX(0); }
         }
-        .btn-active-green { background-color: #22c55e !important; color: #000 !important; font-weight: 900; }
-        .btn-active-purple { background-color: #a855f7 !important; color: #000 !important; font-weight: 900; }
-        .btn-active-orange { background-color: #f97316 !important; color: #000 !important; font-weight: 900; }
         .file-active { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.1); font-weight: 900; color: #3b82f6; }
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
@@ -26,8 +23,8 @@
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
-        details summary::-webkit-details-marker { display: none; }
         summary { cursor: pointer; list-style: none; outline: none; }
+        summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body class="font-sans">
@@ -56,9 +53,8 @@
             <div class="flex flex-col md:flex-row gap-3">
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                     <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
-                    <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1 z-[2000]"></div>
                 </div>
             </div>
         </div>
@@ -116,12 +112,8 @@
                 </details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="grid grid-cols-2 gap-2 mb-4 md:hidden">
-                    <button onclick="toggleHeaderVisibility()" class="text-[10px] font-black uppercase py-2 border border-green-500/40 text-green-500 rounded">Headers</button>
-                    <button onclick="toggleCompletedVisibility()" class="text-[10px] font-black uppercase py-2 border border-purple-500/40 text-purple-500 rounded">Done</button>
-                </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.0</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.1</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -169,13 +161,10 @@
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const sortVal = document.getElementById('sortOrder').value;
-            
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
-            
             if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
             if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
-            
             activeFilters.forEach(f => {
                 if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
@@ -185,12 +174,9 @@
                 else if (f.startsWith('PRIO:')) displayTasks = displayTasks.filter(t => t.meta.prio === f.split(':')[1] || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
-
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
-            
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
-            
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 const isDone = item.text.startsWith('x ');
@@ -208,7 +194,6 @@
         function updateSidebar() {
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
             const dateCats = ['OVERDUE', 'TODAY', 'UPCOMING', 'NO_DUE'];
-            
             const taskMatches = (task, ignoreFilters = []) => {
                 if (task.text.startsWith('x ') || task.meta.isHeader) return false;
                 return Array.from(activeFilters).every(f => {
@@ -223,21 +208,22 @@
                 });
             };
 
-            // 1. Date Dashboard
             const dateCounts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
             tasksWithMeta.forEach(t => { if (taskMatches(t, dateCats)) { if (t.meta.isOverdue) dateCounts.OVERDUE++; else if (t.meta.isToday) dateCounts.TODAY++; else if (t.meta.isUpcoming) dateCounts.UPCOMING++; if (!t.meta.due) dateCounts.NO_DUE++; } });
-            const dateLabels = [{ label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' }, { label: 'Today', key: 'TODAY', color: 'text-yellow-500' }, { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }];
-            document.getElementById('dateList').innerHTML = dateLabels.map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
+            document.getElementById('dateList').innerHTML = [
+                { label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' }, 
+                { label: 'Today', key: 'TODAY', color: 'text-yellow-500' }, 
+                { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, 
+                { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }
+            ].map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
             
-            // 2. Specific Dates Section
             const specificDateMap = {};
-            tasksWithMeta.forEach(t => { if (t.meta.due) { const filterKey = `DATE:${t.meta.due}`; if (taskMatches(t, [filterKey])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
+            tasksWithMeta.forEach(t => { if (t.meta.due) { const key = `DATE:${t.meta.due}`; if (taskMatches(t, [key])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
             document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => {
                 const key = `DATE:${d}`;
-                return `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(key) ? 'font-bold bg-blue-600/30' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`;
+                return `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(key) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`;
             }).join('') || '<div class="opacity-30 italic">None</div>';
 
-            // 3. Priorities, Projects, Contexts
             const updateTags = (id, type, regex, color) => {
                 const tagMap = {};
                 tasksWithMeta.forEach(t => { 
@@ -267,7 +253,12 @@
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
         function handleAuth() { const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); const token = urlParams.get('access_token'); if (token) { localStorage.setItem('dbx_token', token); window.location.hash = ""; location.reload(); } else { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; } }
-        function updateFileUI() { const list = document.getElementById('fileList'); const cleanName = currentFile.replace('/todo_', '').replace('/todo.txt', 'DEFAULT').replace('.txt', ''); document.getElementById('activeFileNameDisplay').innerText = cleanName; list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted'}">${f.replace('/todo_', '').replace('/todo.txt', 'DEFAULT').replace('.txt', '')}</div>`).join(''); }
+        function updateFileUI() { 
+            const list = document.getElementById('fileList'); 
+            const cleanName = currentFile === '/todo.txt' ? 'todo.txt' : currentFile.replace('/todo_', '').replace('.txt', '');
+            document.getElementById('activeFileNameDisplay').innerText = cleanName; 
+            list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
+        }
         async function switchFile(path) { if (path === currentFile) return; currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; activeFilters.clear(); updateFileUI(); await loadTasks(); }
         function createNewFile() { const input = document.getElementById('newFileName'); const rawName = input.value.trim().toUpperCase(); if (!rawName) return; const fullPath = `/todo_${rawName}.txt`; if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); } switchFile(fullPath); }
         function hardLogout() { localStorage.clear(); location.reload(); }
