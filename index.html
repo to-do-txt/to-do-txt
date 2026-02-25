@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.5.5</title>
+    <title>to-do-txt v3.5.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -42,10 +42,9 @@
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         
         #sidebar { z-index: 40; transition: transform 0.3s ease-in-out; background-color: var(--bg-app); border-color: var(--sidebar-border); }
-        header { z-index: 50; position: relative; pointer-events: auto; }
+        header { z-index: 50; position: relative; }
         
-        /* Ensure buttons inside header are always reachable */
-        header button, header select, header input { pointer-events: auto !important; position: relative; z-index: 60; }
+        header button, header select, header input { position: relative; z-index: 60; cursor: pointer; }
 
         #suggestions { z-index: 100 !important; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
 
@@ -60,7 +59,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText">v3.5.5</div>
+        <div id="statusText">v3.5.6</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
@@ -71,7 +70,7 @@
                     <button onclick="toggleSidebar()" class="md:hidden text-muted hover:text-blue-500 text-xl px-1">☰</button>
                     <div class="flex items-baseline gap-2">
                         <div class="font-bold text-lg text-blue-500 cursor-pointer tracking-tighter" onclick="resetAll()">to-do-txt</div>
-                        <button onclick="loadTasks()" id="syncBtn" class="text-[9px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 text-muted uppercase tracking-tighter transition-all cursor-pointer">Sync</button>
+                        <button onclick="loadTasks()" id="syncBtn" class="text-[9px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 text-muted uppercase tracking-tighter transition-all">Sync</button>
                     </div>
                 </div>
                 
@@ -87,7 +86,7 @@
                     <button onclick="toggleHeaderVisibility()" id="headerToggle" class="text-green-500 hover:opacity-70">Headers</button>
                     <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-500 hover:opacity-70">Done</button>
                     <button onclick="toggleRawEdit()" class="text-orange-500 hover:opacity-70">Raw</button>
-                    <button onclick="doLogout()" class="text-gray-500 hover:text-red-500 transition-colors cursor-pointer">Logout</button>
+                    <button onclick="doLogout()" class="text-gray-500 hover:text-red-500 transition-colors">Logout</button>
                 </div>
             </div>
 
@@ -133,9 +132,6 @@
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        const REDIRECT_URI = window.location.href.split('?')[0].split('#')[0];
-        const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        
         const REGEX_PRIO_START = /^\(([A-Z])\)/, REGEX_PROJECT = /\+[\w\-\.\/]+/g, REGEX_CONTEXT = /@[\w\-\.\/]+/g, REGEX_DUE = /due:\d{4}[-.]\d{2}[-.]\d{2}/g, REGEX_LINK = /link:(https?:\/\/[^\s]+|www\.[^\s]+)/g;
 
         let dbx, allTasks = [], activeFilters = new Set(), isRawEditing = false, showCompleted = true, showHeaders = true, editingIndex = null, lastServerTag = null, suggestionIndex = -1, isSyncing = false, currentSort = 'file';
@@ -149,17 +145,13 @@
             if (token) {
                 dbx = new Dropbox.Dropbox({ accessToken: token });
                 loadTasks();
-            } else {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('code')) handleAuthCode(urlParams.get('code'));
             }
         }
 
         async function loadTasks() {
             if (isSyncing || !dbx) return;
             isSyncing = true;
-            const btn = document.getElementById('syncBtn');
-            btn?.classList.add('syncing-anim');
+            document.getElementById('syncBtn')?.classList.add('syncing-anim');
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 lastServerTag = res.result.rev;
@@ -170,7 +162,7 @@
             } catch (e) { console.error("Sync Error:", e); }
             finally { 
                 isSyncing = false; 
-                btn?.classList.remove('syncing-anim');
+                document.getElementById('syncBtn')?.classList.remove('syncing-anim');
             }
         }
 
@@ -188,7 +180,9 @@
         function doLogout() {
             if(confirm("Logout from Dropbox?")) {
                 localStorage.removeItem('dbx_token');
-                window.location.reload();
+                dbx = null;
+                // Redirect to origin without hash/params
+                window.location.href = window.location.origin + window.location.pathname;
             }
         }
 
@@ -251,7 +245,7 @@
                 return `<div class="group flex items-center card-bg border-l-4 ${pClass} ${(!isDone && item.meta.isPastDue) ? 'overdue-alert' : ''} mb-1 p-3 hover:brightness-110 rounded-r shadow-sm transition-all">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     <div class="flex-1 text-sm cursor-text ${isDone ? 'line-through opacity-50 italic' : ''}" onclick="startEditing(${item.originalIndex})">${workingText}</div>
-                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2 transition-opacity">✕</button>
+                    <button deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             updateSidebars(display);
@@ -294,7 +288,7 @@
         function handleGlobalClick(e) {
             const suggestions = document.getElementById('suggestions');
             const addInp = document.getElementById('newTodo');
-            if (!suggestions.contains(e.target) && e.target !== addInp) hideSuggestions();
+            if (suggestions && !suggestions.contains(e.target) && e.target !== addInp) hideSuggestions();
         }
 
         function handleInput(e) {
@@ -333,11 +327,11 @@
             inp.focus();
         }
 
-        function hideSuggestions() { document.getElementById('suggestions').classList.add('hidden'); }
+        function hideSuggestions() { document.getElementById('suggestions')?.classList.add('hidden'); }
 
         function handleInputKeydown(e) {
             const container = document.getElementById('suggestions');
-            if (container.classList.contains('hidden')) { if (e.key === 'Enter') addTask(); return; }
+            if (!container || container.classList.contains('hidden')) { if (e.key === 'Enter') addTask(); return; }
             if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applySuggestion(container.children[suggestionIndex].querySelector('span').innerText); }
             else if (e.key === 'Escape') hideSuggestions();
         }
