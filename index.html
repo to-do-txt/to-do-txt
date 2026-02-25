@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.5.6</title>
+    <title>to-do-txt v3.5.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -29,6 +29,7 @@
 
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s, color 0.1s; }
         
+        /* Header hierarchy styles */
         .h1-style { font-size: 1.5rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; padding-top: 2rem; margin-bottom: 1rem; }
         .h2-style { font-size: 1.125rem; font-weight: 800; color: #60a5fa; padding-top: 1.5rem; margin-bottom: 0.75rem; border-bottom: 1px solid #333; }
         .h3-style { font-size: 0.65rem; font-weight: 900; color: #93c5fd; letter-spacing: 0.1em; text-transform: uppercase; padding-top: 1rem; margin-bottom: 0.5rem; opacity: 0.8; }
@@ -42,12 +43,13 @@
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         
         #sidebar { z-index: 40; transition: transform 0.3s ease-in-out; background-color: var(--bg-app); border-color: var(--sidebar-border); }
-        header { z-index: 50; position: relative; }
+        header { z-index: 60; position: relative; }
         
-        header button, header select, header input { position: relative; z-index: 60; cursor: pointer; }
+        /* Logout Specific Styling to ensure visibility and clickability */
+        .logout-btn { cursor: pointer !important; padding: 4px 8px; border-radius: 4px; transition: all 0.2s; }
+        .logout-btn:hover { background-color: rgba(239, 68, 68, 0.1); color: #ef4444 !important; }
 
         #suggestions { z-index: 100 !important; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
-
         .overdue-alert { border-right: 2px solid #ef4444 !important; }
         @media (max-width: 768px) { #sidebar.closed { transform: translateX(-100%); } }
         
@@ -59,7 +61,7 @@
 
     <div id="status" class="fixed bottom-2 right-4 text-[10px] font-mono z-50 flex items-center gap-2 text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-500"></div>
-        <div id="statusText">v3.5.6</div>
+        <div id="statusText">v3.5.7</div>
         <div id="lastSync" class="border-l border-gray-800 pl-2">Ready</div>
     </div>
 
@@ -75,18 +77,18 @@
                 </div>
                 
                 <div class="flex items-center gap-2 sm:gap-3 text-[9px] font-bold uppercase tracking-widest">
-                    <button onclick="toggleTheme()" id="themeToggle" class="text-yellow-500 hover:opacity-70">☀️ Light</button>
-                    <select id="sortSelect" onchange="setSort(this.value)" class="bg-transparent border border-gray-700 text-muted px-1 py-1 rounded outline-none cursor-pointer hover:border-gray-500">
+                    <button onclick="toggleTheme()" id="themeToggle" class="text-yellow-500">☀️ Light</button>
+                    <select id="sortSelect" onchange="setSort(this.value)" class="bg-transparent border border-gray-700 text-muted px-1 py-1 rounded outline-none cursor-pointer">
                         <option value="file">File Order</option>
                         <option value="priority">Priority</option>
                         <option value="due">Due Date</option>
                         <option value="project">Project</option>
                         <option value="context">Context</option>
                     </select>
-                    <button onclick="toggleHeaderVisibility()" id="headerToggle" class="text-green-500 hover:opacity-70">Headers</button>
-                    <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-500 hover:opacity-70">Done</button>
-                    <button onclick="toggleRawEdit()" class="text-orange-500 hover:opacity-70">Raw</button>
-                    <button onclick="doLogout()" class="text-gray-500 hover:text-red-500 transition-colors">Logout</button>
+                    <button onclick="toggleHeaderVisibility()" id="headerToggle" class="text-green-500">Headers</button>
+                    <button onclick="toggleCompletedVisibility()" id="doneToggle" class="text-purple-500">Done</button>
+                    <button onclick="toggleRawEdit()" class="text-orange-500">Raw</button>
+                    <button id="logoutBtn" class="logout-btn text-gray-500">Logout</button>
                 </div>
             </div>
 
@@ -102,7 +104,7 @@
                     <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeydown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="w-full input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
                     <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b z-[100] max-h-60 overflow-y-auto mt-1"></div>
                 </div>
-                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500 transition-colors">Add</button>
+                <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500">Add</button>
             </div>
         </div>
     </header>
@@ -141,6 +143,19 @@
             if(savedTheme === 'light') document.body.classList.add('light-mode');
             updateThemeButton();
 
+            // Set up Logout Button explicitly
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if(confirm("Logout from Dropbox?")) {
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        window.location.href = window.location.origin + window.location.pathname;
+                    }
+                });
+            }
+
             const token = localStorage.getItem('dbx_token');
             if (token) {
                 dbx = new Dropbox.Dropbox({ accessToken: token });
@@ -159,8 +174,13 @@
                 allTasks = text.split('\n').filter(t => t.trim() !== "");
                 render();
                 updateSyncTime();
-            } catch (e) { console.error("Sync Error:", e); }
-            finally { 
+            } catch (e) { 
+                console.error("Sync Error:", e);
+                if (e.status === 401) {
+                    localStorage.removeItem('dbx_token');
+                    window.location.reload();
+                }
+            } finally { 
                 isSyncing = false; 
                 document.getElementById('syncBtn')?.classList.remove('syncing-anim');
             }
@@ -175,15 +195,6 @@
                 updateSyncTime();
             } catch (e) { console.error("Save Error:", e); }
             finally { isSyncing = false; }
-        }
-
-        function doLogout() {
-            if(confirm("Logout from Dropbox?")) {
-                localStorage.removeItem('dbx_token');
-                dbx = null;
-                // Redirect to origin without hash/params
-                window.location.href = window.location.origin + window.location.pathname;
-            }
         }
 
         function toggleTheme() {
@@ -245,7 +256,7 @@
                 return `<div class="group flex items-center card-bg border-l-4 ${pClass} ${(!isDone && item.meta.isPastDue) ? 'overdue-alert' : ''} mb-1 p-3 hover:brightness-110 rounded-r shadow-sm transition-all">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.originalIndex})" class="w-5 h-5 mr-4 cursor-pointer accent-blue-500">
                     <div class="flex-1 text-sm cursor-text ${isDone ? 'line-through opacity-50 italic' : ''}" onclick="startEditing(${item.originalIndex})">${workingText}</div>
-                    <button deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2 transition-opacity">✕</button>
+                    <button onclick="deleteTask(${item.originalIndex})" class="md:opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             updateSidebars(display);
