@@ -3,106 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.19</title>
+    <title>to-do-txt v3.6.20</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
-        body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
+        body { background-color: var(--bg-app); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        .app-grid { display: grid; grid-template-columns: 0px 1fr; flex: 1; overflow: hidden; transition: grid-template-columns 0.2s ease; }
-        .app-grid.sidebar-pinned { grid-template-columns: 280px 1fr; }
+        /* New Flex Layout */
+        .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
         
         #sidebar { 
-            position: fixed; top: 0; left: -280px; bottom: 0; width: 280px; z-index: 100; 
-            transition: left 0.2s ease; box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+            width: 280px; height: 100%; background: var(--bg-card); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; flex-shrink: 0;
+            transition: transform 0.2s ease, margin-left 0.2s ease;
+            z-index: 100;
         }
-        .sidebar-visible { left: 0 !important; }
-        
+
+        /* Desktop States */
         @media (min-width: 768px) {
-            .app-grid.sidebar-pinned #sidebar { position: relative; left: 0; box-shadow: none; border-right: 1px solid var(--border); }
+            #sidebar.hidden-desktop { margin-left: -280px; }
+            #sidebar.floating { position: absolute; left: 0; box-shadow: 10px 0 30px rgba(0,0,0,0.5); margin-left: 0; }
+        }
+
+        /* Mobile States */
+        @media (max-width: 767px) {
+            #sidebar { position: fixed; left: -280px; }
+            #sidebar.mobile-open { left: 0; box-shadow: 10px 0 50px rgba(0,0,0,0.8); }
         }
 
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
-        .card-bg { background-color: var(--bg-card); border-color: var(--border); }
-        .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
-        .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
+        .card-bg { background-color: var(--bg-card); }
+        .input-bg { background-color: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); }
+        .prio-a { border-left: 4px solid #fb923c; } .prio-b { border-left: 4px solid #facc15; } .prio-none { border-left: 4px solid #3b82f6; }
         #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto; }
         .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
-        .suggestion-item:hover, .suggestion-active { background-color: #3b82f6; color: white; }
+        .suggestion-item:hover { background-color: #3b82f6; }
     </style>
 </head>
 <body class="font-sans">
 
-    <header class="p-6 card-bg border-b shadow-lg relative z-50">
+    <header class="p-6 card-bg border-b shadow-lg z-50">
         <div class="max-w-6xl mx-auto flex flex-col gap-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <button id="menuBtn" onclick="toggleSidebar()" class="text-muted text-xl p-1">☰</button>
+                    <button onclick="toggleSidebar()" class="text-muted text-xl p-1">☰</button>
                     <div class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <div class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
-                        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
-                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60 text-gray-400">Ready</span>
+                    <div id="syncIndicator" class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
+                        <div class="w-2 h-2 rounded-full bg-green-600"></div>
+                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60">Ready</span>
                     </div>
                 </div>
-                
                 <div class="flex items-center gap-4">
                     <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
-                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-3 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer">
+                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-1 text-[10px] font-bold uppercase outline-none">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
                 </div>
             </div>
-            
             <div class="flex flex-col md:flex-row gap-3">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="What needs to be done?" class="flex-1 input-bg rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500">Add</button>
                     <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1"></div>
                 </div>
             </div>
         </div>
     </header>
 
-    <div id="appGrid" class="app-grid sidebar-pinned">
-        <aside id="sidebar" class="p-6 overflow-y-auto card-bg flex flex-col">
+    <div class="main-container">
+        <aside id="sidebar" class="p-6 overflow-y-auto">
             <div class="flex justify-between items-center mb-8">
                 <div class="flex items-center gap-2">
-                    <span class="font-bold text-blue-500 uppercase text-xs tracking-widest">Control</span>
-                    <button id="pinBtn" onclick="togglePin()" class="hidden md:block text-muted hover:text-blue-500 text-xs">📌</button>
+                    <span class="font-bold text-blue-500 uppercase text-xs tracking-widest">Menu</span>
+                    <button id="pinBtn" onclick="handlePinToggle()" class="hidden md:block text-muted hover:text-blue-500 text-xs">📌</button>
                 </div>
-                <button onclick="toggleSidebar()" class="text-xl px-2" aria-label="Close sidebar">✕</button>
+                <button onclick="closeSidebar()" class="text-xl px-2">✕</button>
             </div>
             
             <div class="mb-8">
-                <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">View Control</h2>
-                <div class="grid grid-cols-1 gap-2">
-                    <button onclick="toggleHeaderVisibility()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-white/10">Toggle Headers</button>
-                    <button onclick="toggleCompletedVisibility()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-white/10">Toggle Completed</button>
-                    <button onclick="toggleRawEdit()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-white/10">Raw Editor</button>
-                    <button onclick="loadTasks()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[11px] font-bold hover:bg-white/10">Manual Sync</button>
-                    <button onclick="hardLogout()" class="w-full text-left px-3 py-2 rounded bg-red-500/10 border border-red-500/10 text-[11px] font-bold text-red-400">Logout</button>
+                <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Tools</h2>
+                <div class="grid grid-cols-1 gap-1">
+                    <button onclick="toggleHeaderVisibility()" class="text-left px-3 py-2 rounded bg-white/5 text-[11px] font-bold hover:bg-white/10">Toggle Headers</button>
+                    <button onclick="toggleCompletedVisibility()" class="text-left px-3 py-2 rounded bg-white/5 text-[11px] font-bold hover:bg-white/10">Toggle Completed</button>
+                    <button onclick="toggleRawEdit()" class="text-left px-3 py-2 rounded bg-white/5 text-[11px] font-bold hover:bg-white/10">Raw Editor</button>
+                    <button onclick="hardLogout()" class="text-left px-3 py-2 rounded bg-red-500/5 text-red-400 text-[11px] font-bold mt-2">Logout</button>
                 </div>
             </div>
 
             <button onclick="resetFilters()" class="w-full mb-8 text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
             
-            <div class="mb-8"><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Dates</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
-            <div class="mb-12"><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
+            <div class="space-y-8">
+                <div><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Dates</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
+                <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
+                <div><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
+                <div><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
+            </div>
             
-            <div class="mt-auto pt-6 border-t border-gray-800 space-y-1.5 opacity-40">
+            <div class="mt-auto pt-6 border-t border-gray-800 opacity-40">
                 <div id="sidebarOpenTasks" class="text-[9px] font-black uppercase">Tasks: 0</div>
-                <div class="text-[9px] font-black uppercase text-blue-400">Build: v3.6.19</div>
+                <div class="text-[9px] font-black uppercase text-blue-400">v3.6.20</div>
             </div>
         </aside>
         
-        <main class="p-6 md:p-10 overflow-y-auto" onclick="handleMainClick()">
+        <main id="mainContent" class="flex-1 overflow-y-auto p-6 md:p-10" onclick="handleMainClick()">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
                 <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-6 border rounded-xl resize-none mb-4 outline-none"></textarea>
@@ -114,60 +122,74 @@
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null, isSyncing = false;
-        let suggestionIdx = -1, isPinned = true;
+        let isPinned = localStorage.getItem('sidebar_pinned') !== 'false'; // Default true
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
             if (token) { 
                 dbx = new Dropbox.Dropbox({ accessToken: token }); 
+                applySidebarState();
                 await loadTasks(); 
                 setInterval(loadTasks, 30000); 
-                // Set initial desktop state
-                if(window.innerWidth >= 768) {
-                    document.getElementById('appGrid').classList.add('sidebar-pinned');
-                    document.getElementById('sidebar').classList.add('sidebar-visible');
-                }
             } else { handleAuth(); }
         }
 
-        function togglePin() {
-            isPinned = !isPinned;
-            const grid = document.getElementById('appGrid');
+        function applySidebarState() {
             const side = document.getElementById('sidebar');
-            if(isPinned) {
-                grid.classList.add('sidebar-pinned');
-                side.classList.add('sidebar-visible');
-            } else {
-                grid.classList.remove('sidebar-pinned');
-                side.classList.remove('sidebar-visible');
+            const pinBtn = document.getElementById('pinBtn');
+            if (window.innerWidth >= 768) {
+                if (isPinned) {
+                    side.classList.remove('hidden-desktop', 'floating');
+                    pinBtn.innerText = '📌';
+                } else {
+                    side.classList.add('hidden-desktop');
+                    side.classList.remove('floating');
+                    pinBtn.innerText = '📍';
+                }
             }
+        }
+
+        function handlePinToggle() {
+            isPinned = !isPinned;
+            localStorage.setItem('sidebar_pinned', isPinned);
+            applySidebarState();
         }
 
         function toggleSidebar() {
             const side = document.getElementById('sidebar');
-            side.classList.toggle('sidebar-visible');
-        }
-
-        function handleMainClick() {
-            // On mobile, clicking main content closes the sidebar
-            if(window.innerWidth < 768) {
-                document.getElementById('sidebar').classList.remove('sidebar-visible');
+            if (window.innerWidth < 768) {
+                side.classList.toggle('mobile-open');
+            } else {
+                if (!isPinned) {
+                    side.classList.toggle('hidden-desktop');
+                    side.classList.toggle('floating');
+                } else {
+                    handlePinToggle();
+                }
             }
         }
 
-        function handleAuth() {
-            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
-            const code = urlParams.get('access_token');
-            if (code) { localStorage.setItem('dbx_token', code); window.location.hash = ""; location.reload(); }
-            else {
-                const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
-                document.body.innerHTML = `<div class="h-screen flex items-center justify-center"><button onclick="window.location.href='${authUrl}'" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-xl">Connect to Dropbox</button></div>`;
+        function closeSidebar() {
+            const side = document.getElementById('sidebar');
+            side.classList.remove('mobile-open', 'floating');
+            if (window.innerWidth >= 768 && isPinned) {
+                handlePinToggle();
+            }
+        }
+
+        function handleMainClick() {
+            if (window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.remove('mobile-open');
+            } else if (document.getElementById('sidebar').classList.contains('floating')) {
+                document.getElementById('sidebar').classList.remove('floating', 'mobile-open');
+                document.getElementById('sidebar').classList.add('hidden-desktop');
             }
         }
 
         function setStatus(text, active = false) {
             document.getElementById('statusText').innerText = text;
-            document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
+            const dot = document.querySelector('#syncIndicator div');
+            dot.className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
         }
 
         async function loadTasks() {
@@ -230,7 +252,7 @@
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
 
-                return `<div class="group flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
+                return `<div class="group flex items-center p-3 card-bg ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
                     <button onclick="deleteTask(${item.i})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
@@ -268,7 +290,7 @@
                 const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
                 dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-2 rounded cursor-pointer ${active} border-l border-gray-800 ml-2 hover:bg-white/5 transition-colors"><span>${d}</span><span class="opacity-40">${specificDates[d]}</span></div>`;
             });
-            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-2 opacity-30 italic">No dates</div>';
+            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-2 opacity-30 italic text-[10px]">No matches</div>';
 
             const updateCat = (id, regex, color) => {
                 const c = {};
@@ -276,7 +298,7 @@
                 document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
                     const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
                     return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
-                }).join('') || '<div class="px-2 opacity-30 italic">Empty</div>';
+                }).join('') || '<div class="px-2 opacity-30 italic text-[10px]">Empty</div>';
             };
             updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
             updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
@@ -311,18 +333,13 @@
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
                 const prefix = lastWord[0];
                 const tags = [...new Set(allTasks.flatMap(t => t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))].filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
-                if (tags.length) { sugBox.innerHTML = tags.map((t, i) => `<div class="suggestion-item ${i===suggestionIdx?'suggestion-active':''}" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
+                if (tags.length) { sugBox.innerHTML = tags.map((t, i) => `<div class="suggestion-item" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
             }
-            sugBox.classList.add('hidden'); suggestionIdx = -1;
+            sugBox.classList.add('hidden');
         }
 
         function handleInputKeyDown(e) {
-            const s = document.querySelectorAll('.suggestion-item');
-            if (!document.getElementById('suggestions').classList.contains('hidden')) {
-                if (e.key === 'ArrowDown') { e.preventDefault(); suggestionIdx = (suggestionIdx + 1) % s.length; handleInput({target: document.getElementById('newTodo')}); }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); suggestionIdx = (suggestionIdx - 1 + s.length) % s.length; handleInput({target: document.getElementById('newTodo')}); }
-                else if (e.key === 'Enter' && suggestionIdx > -1) { e.preventDefault(); s[suggestionIdx].click(); }
-            } else if (e.key === 'Enter') { addTask(); }
+            if (e.key === 'Enter') addTask();
         }
 
         function applySuggestion(tag) {
@@ -350,6 +367,15 @@
         }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function hardLogout() { if(confirm("Logout?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
+        function handleAuth() {
+            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+            const code = urlParams.get('access_token');
+            if (code) { localStorage.setItem('dbx_token', code); window.location.hash = ""; location.reload(); }
+            else {
+                const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
+                document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="window.location.href='${authUrl}'" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-xl">Connect to Dropbox</button></div>`;
+            }
+        }
         init();
     </script>
 </body>
