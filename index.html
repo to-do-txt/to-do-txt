@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.5.9</title>
+    <title>to-do-txt v3.6.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -11,7 +11,6 @@
         .light-mode { --bg-app: #f4f4f5; --bg-card: #ffffff; --bg-input: #ffffff; --text-main: #18181b; --text-muted: #71717a; --border: #e4e4e7; }
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s; overflow: hidden; }
         
-        /* Header hierarchy */
         .h1-style { font-size: 1.25rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.75rem 0; text-transform: uppercase; }
         .h2-style { font-size: 1rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.5rem 0; text-transform: uppercase; }
         .h3-style { font-size: 0.75rem; font-weight: 900; color: #93c5fd; margin: 1rem 0 0.5rem 0; text-transform: uppercase; opacity: 0.8; letter-spacing: 0.05em; }
@@ -19,6 +18,7 @@
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         
+        #sidebar { z-index: 40; background-color: var(--bg-app); }
         .task-item { border-left-width: 4px; transition: all 0.2s; }
         .prio-a { border-color: #fb923c; }
         .prio-b { border-color: #facc15; }
@@ -26,6 +26,8 @@
         
         .syncing-anim { animation: pulse 1s infinite; color: #3b82f6 !important; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        @media (max-width: 768px) { .sidebar-closed { display: none; } }
     </style>
 </head>
 <body class="font-sans h-screen flex flex-col">
@@ -34,7 +36,8 @@
         <div class="max-w-5xl mx-auto flex flex-col gap-3">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="font-bold text-lg text-blue-500 tracking-tighter">to-do-txt</div>
+                    <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl">☰</button>
+                    <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
                     <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase">Sync</button>
                 </div>
                 
@@ -55,6 +58,16 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden">
+        <aside id="sidebar" class="w-64 p-6 border-r overflow-y-auto sidebar-closed md:block">
+            <div id="pdCont" class="mb-8 hidden">
+                <h2 class="text-[10px] font-black text-red-500 mb-4 uppercase tracking-widest">Past Due</h2>
+                <div id="pastDueList" class="space-y-1 text-xs"></div>
+            </div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-blue-500/50">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
+            <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-green-500/50">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
+        </aside>
+        
         <main class="flex-1 p-6 overflow-y-auto">
             <div id="todoList" class="max-w-4xl mx-auto space-y-1"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
@@ -66,7 +79,7 @@
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        let dbx, allTasks = [], showCompleted = true, showHeaders = true, editingIndex = null;
+        let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -107,47 +120,91 @@
 
         function render() {
             const list = document.getElementById('todoList');
-            list.innerHTML = allTasks.map((text, i) => {
-                const isHeader = text.startsWith('#');
-                const isDone = text.startsWith('x ');
-                
-                if (!showCompleted && isDone && !isHeader) return '';
-                if (!showHeaders && isHeader) return '';
+            let display = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
 
-                if (isHeader) {
-                    const level = text.match(/^#+/)[0].length;
+            if (!showCompleted) display = display.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            if (!showHeaders) display = display.filter(t => !t.meta.isHeader);
+            
+            activeFilters.forEach(f => {
+                if (f === 'OVERDUE') display = display.filter(t => t.meta.isOverdue || t.meta.isHeader);
+                else display = display.filter(t => t.text.includes(f) || t.meta.isHeader);
+            });
+
+            list.innerHTML = display.map(item => {
+                if (item.meta.isHeader) {
+                    const level = item.text.match(/^#+/)[0].length;
                     const hClass = level === 1 ? 'h1-style' : level === 2 ? 'h2-style' : 'h3-style';
-                    return `<div class="${hClass}">${text.replace(/^#+\s*/, '')}</div>`;
+                    return `<div class="${hClass}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 }
 
-                if (editingIndex === i) {
+                if (editingIndex === item.i) {
                     return `<div class="p-2 card-bg rounded border border-blue-500">
-                        <input id="edit-${i}" type="text" value="${text.replace(/"/g, '&quot;')}" 
+                        <input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" 
                         class="w-full bg-transparent text-sm outline-none" 
-                        onblur="finishEdit(${i}, this.value)" 
-                        onkeypress="if(event.key==='Enter') finishEdit(${i}, this.value)">
+                        onblur="finishEdit(${item.i}, this.value)" 
+                        onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)">
                     </div>`;
                 }
 
-                const prioMatch = text.match(/^\(([A-Z])\)/);
-                const pClass = prioMatch ? (prioMatch[1] === 'A' ? 'prio-a' : 'prio-b') : 'prio-none';
-                
-                let displayHTML = text.replace(/link:(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline" onclick="event.stopPropagation()">link ↗</a>')
-                                      .replace(/^\(([A-Z])\)/, '<span class="text-orange-400 font-bold">($1)</span>');
+                const isDone = item.text.startsWith('x ');
+                const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
+                let html = item.text.replace(/link:(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline" onclick="event.stopPropagation()">link ↗</a>')
+                                    .replace(/^\(([A-Z])\)/, '<span class="text-orange-400 font-bold">($1)</span>');
 
                 return `<div class="group flex items-center p-3 card-bg rounded-r border-l-4 ${pClass} ${isDone ? 'opacity-40 italic' : ''} mb-1 hover:brightness-110">
-                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${i})" class="w-5 h-5 mr-4 accent-blue-500 cursor-pointer">
-                    <div class="flex-1 text-sm cursor-text" onclick="startEdit(${i})">${displayHTML}</div>
-                    <button onclick="deleteTask(${i})" class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2 transition-opacity">✕</button>
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-5 h-5 mr-4 accent-blue-500 cursor-pointer">
+                    <div class="flex-1 text-sm cursor-text" onclick="startEdit(${item.i})">${html}</div>
+                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
+            
+            updateSidebarUI(display);
         }
 
+        function getMeta(t) {
+            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
+            let isOverdue = false;
+            if (d && !t.startsWith('x ')) {
+                isOverdue = new Date(d[1]) < new Date().setHours(0,0,0,0);
+            }
+            return {
+                isHeader: t.startsWith('#'),
+                prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
+                isOverdue
+            };
+        }
+
+        function updateSidebarUI(visibleTasks) {
+            const build = (id, regex, color) => {
+                const counts = {};
+                allTasks.forEach(t => { (t.match(regex) || []).forEach(tag => counts[tag] = (counts[tag] || 0)); });
+                visibleTasks.forEach(t => { if(!t.text.startsWith('x ')) (t.text.match(regex) || []).forEach(tag => counts[tag]++); });
+                
+                document.getElementById(id).innerHTML = Object.entries(counts).sort().map(([tag, count]) => {
+                    if (count === 0 && !activeFilters.has(tag)) return '';
+                    const active = activeFilters.has(tag) ? 'font-bold text-white bg-blue-600/20' : color;
+                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-1 rounded cursor-pointer ${active}"><span>${tag}</span><span>${count}</span></div>`;
+                }).join('');
+            };
+
+            build('priorityList', /\([A-Z]\)/g, 'text-orange-400');
+            build('projectList', /\+[\w\-]+/g, 'text-blue-400');
+            build('contextList', /@[\w\-]+/g, 'text-green-400');
+
+            const odCount = allTasks.filter(t => getMeta(t).isOverdue).length;
+            const odCont = document.getElementById('pdCont');
+            if (odCount > 0) {
+                odCont.classList.remove('hidden');
+                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('OVERDUE')" class="flex justify-between p-1 rounded cursor-pointer ${activeFilters.has('OVERDUE') ? 'text-white bg-red-600/20 font-bold' : 'text-red-400'}"><span>Overdue</span><span>${odCount}</span></div>`;
+            } else odCont.classList.add('hidden');
+        }
+
+        function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
+        function resetFilters() { activeFilters.clear(); render(); }
         function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
         function finishEdit(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
         function addTask() {
-            const inp = document.getElementById('newTodo');
-            if (!inp.value.trim()) return;
+            const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return;
             let val = inp.value.trim();
             if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val;
             allTasks.push(val); inp.value = ""; render(); saveTasks();
@@ -156,18 +213,16 @@
             allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`;
             render(); saveTasks();
         }
-        function deleteTask(i) { if(confirm("Delete task?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
+        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function hardLogout() { if(confirm("Logout?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
         function toggleTheme() { document.body.classList.toggle('light-mode'); }
         function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
         function toggleHeaderVisibility() { showHeaders = !showHeaders; render(); }
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-closed'); }
         function toggleRawEdit() {
-            const cont = document.getElementById('rawEditorContainer');
-            const list = document.getElementById('todoList');
-            if (cont.classList.contains('hidden')) {
-                document.getElementById('rawEditor').value = allTasks.join('\n');
-                cont.classList.remove('hidden'); list.classList.add('hidden');
-            } else { cont.classList.add('hidden'); list.classList.remove('hidden'); }
+            const cont = document.getElementById('rawEditorContainer'); const list = document.getElementById('todoList');
+            if (cont.classList.contains('hidden')) { document.getElementById('rawEditor').value = allTasks.join('\n'); cont.classList.remove('hidden'); list.classList.add('hidden'); }
+            else { cont.classList.add('hidden'); list.classList.remove('hidden'); }
         }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
 
