@@ -3,301 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.9</title>
+    <title>to-do-txt v4.1.11</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
-        :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
-        body { background-color: var(--bg-app); color: var(--text-main); overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        .app-grid { display: grid; grid-template-columns: 280px 1fr; flex: 1; overflow: hidden; }
-        @media (max-width: 768px) { 
-            .app-grid { grid-template-columns: 1fr; } 
-            #sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000; width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; transform: translateX(-100%); transition: transform 0.2s ease; }
-            #sidebar.sidebar-open { transform: translateX(0); }
+        :root { --bg-app: #121212; --bg-card: #1e1e1e; --border: #333; --blue: #3b82f6; }
+        body { background: var(--bg-app); color: #e5e7eb; height: 100vh; display: flex; flex-direction: column; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+        
+        /* Persistent Grid Layout */
+        .app-shell { display: grid; grid-template-columns: 280px 1fr; flex: 1; overflow: hidden; }
+        
+        @media (max-width: 768px) {
+            .app-shell { grid-template-columns: 1fr; }
+            #sidebar { 
+                position: fixed; inset: 0 0 0 0; width: 85%; max-width: 300px;
+                z-index: 1000; transform: translateX(-105%);
+                transition: transform 0.3s ease; background: var(--bg-card);
+                box-shadow: 20px 0 50px rgba(0,0,0,0.8);
+            }
+            #sidebar.open { transform: translateX(0); }
+            .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; }
+            .overlay.active { display: block; }
         }
-        .file-active { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.1); font-weight: 900; color: #3b82f6; }
-        .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
-        .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
-        .card-bg { background-color: var(--bg-card); border-color: var(--border); }
-        .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
-        .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
-        summary { cursor: pointer; list-style: none; outline: none; display: flex; align-items: center; justify-content: space-between; user-select: none; }
-        summary::-webkit-details-marker { display: none; }
-        .toggle-icon::before { content: "[+]"; font-family: monospace; font-weight: bold; color: #3b82f6; font-size: 14px; }
-        details[open] .toggle-icon::before { content: "[-]"; color: #ef4444; }
-        details[open] summary { color: #60a5fa; margin-bottom: 0.5rem; }
-        .btn-toggle { font-size: 10px; font-weight: 900; padding: 4px 10px; border-radius: 4px; border: 1px solid #333; text-transform: uppercase; transition: all 0.2s; }
-        .btn-toggle.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+
+        /* Typography & UI */
+        .h1-style { font-size: 1.1rem; font-weight: 900; color: var(--blue); border-bottom: 2px solid var(--blue); margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
+        .file-active { border-left: 4px solid var(--blue); background: rgba(59,130,246,0.1); color: var(--blue); font-weight: 900; }
+        .btn-touch { min-height: 44px; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
+        .btn-touch:active { opacity: 0.6; }
+        
+        /* The Edit Field Fix */
+        .edit-container { background: #000; border: 2px solid var(--blue); border-radius: 8px; padding: 4px; margin: 4px 0; }
+        .edit-input { width: 100%; background: transparent; color: white; padding: 12px; font-size: 16px; outline: none; border: none; }
     </style>
 </head>
-<body class="font-sans">
+<body>
 
-    <header class="p-4 md:p-6 card-bg border-b shadow-lg relative z-50">
+    <header class="p-4 md:p-6 bg-[#1e1e1e] border-b border-[#333] z-[1100]">
         <div class="max-w-6xl mx-auto flex flex-col gap-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl p-1">☰</button>
-                    <div class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <div class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
-                        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
-                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60 text-gray-400">Ready</span>
-                    </div>
+                    <button onclick="toggleSidebar()" class="md:hidden text-blue-500 text-3xl btn-touch px-2">☰</button>
+                    <h1 class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</h1>
+                    <div id="syncStatus" class="w-2 h-2 rounded-full bg-gray-500"></div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <span id="activeFileNameDisplay" class="hidden md:block text-[10px] font-black text-blue-400 border border-blue-500/30 px-2 py-1 rounded bg-blue-500/5 uppercase"></span>
-                    <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
-                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-3 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer">
+                <div class="flex items-center gap-2">
+                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded px-2 py-1 text-[10px] font-bold uppercase outline-none">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
-                        <option value="due">Due Date</option>
                     </select>
                 </div>
             </div>
-            <div class="flex flex-col md:flex-row gap-3">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
-                </div>
-            </div>
-            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
-                <button onclick="toggleCompleted()" id="toggleCompBtn" class="btn-toggle active">Completed</button>
-                <button onclick="toggleHeaders()" id="toggleHeadBtn" class="btn-toggle active">Headers</button>
-                <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
-                <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
-                <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Export</button>
+            <div class="flex gap-2">
+                <input type="text" id="newTodo" autocomplete="off" onkeydown="if(event.key==='Enter')addTask()" placeholder="Quick add..." class="flex-1 bg-[#0a0a0a] border border-[#333] rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500">
+                <button onclick="addTask()" class="bg-blue-600 px-6 rounded-lg font-bold text-xs uppercase btn-touch">Add</button>
             </div>
         </div>
     </header>
 
-    <div class="app-grid">
-        <aside id="sidebar" class="card-bg border-r overflow-hidden flex flex-col">
-            <div class="p-6 flex justify-between items-center md:hidden border-b border-gray-800">
-                <span class="font-black text-blue-500 uppercase text-xs tracking-widest">FILES</span>
-                <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
+    <div class="app-shell">
+        <aside id="sidebar" class="flex flex-col border-r border-[#333]">
+            <div class="p-6 flex justify-between items-center border-b border-gray-800 md:hidden">
+                <span class="font-black text-blue-500 text-xs">MENU</span>
+                <button onclick="toggleSidebar()" class="text-2xl text-red-500 btn-touch px-4">✕</button>
             </div>
-            <div class="flex-1 overflow-y-auto p-6 space-y-6">
-                <section>
-                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">File Manager</h2>
+            <div class="flex-1 overflow-y-auto p-6 space-y-8">
+                <nav>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Files</h2>
                     <div id="fileList" class="space-y-1 mb-4"></div>
-                    <button onclick="showFileManager()" class="w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all">Manage Project List</button>
+                    <div class="flex gap-2">
+                        <input type="text" id="newFileName" maxlength="20" placeholder="NEW..." class="flex-1 bg-black/40 border border-gray-800 rounded px-2 py-2 text-[10px] outline-none uppercase">
+                        <button onclick="createNewFile()" class="bg-blue-600 px-4 rounded font-bold">+</button>
+                    </div>
+                </nav>
+
+                <div id="filterDashboard">
+                    <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-3 rounded uppercase mb-4">Clear Filters</button>
+                    <div id="projectFilters" class="space-y-1"></div>
+                </div>
+
+                <section class="border-t border-gray-800 pt-6 pb-20">
+                    <h2 class="text-[10px] font-black text-red-500 mb-2 uppercase">Bulk Edit / Backup</h2>
+                    <textarea id="bulkEdit" class="w-full h-40 bg-black/40 border border-gray-800 rounded p-2 text-[10px] font-mono outline-none mb-2" spellcheck="false"></textarea>
+                    <button onclick="applyBulk()" class="w-full bg-blue-900/20 text-blue-500 text-[10px] font-black py-3 rounded uppercase border border-blue-900/50 btn-touch">Apply Changes</button>
                 </section>
-                <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
-                <section><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Dashboard</h2><div id="dateList" class="space-y-1 text-xs"></div></section>
-                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Specific Dates <span class="toggle-icon"></span></summary><div id="specificDateList" class="space-y-1 text-xs pt-2"></div></details>
-                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Priorities <span class="toggle-icon"></span></summary><div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div></details>
-                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Projects <span class="toggle-icon"></span></summary><div id="projectList" class="space-y-1 text-xs pt-2"></div></details>
-                <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
-            <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.9</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+            <div class="p-4 border-t border-gray-800">
+                <button onclick="hardLogout()" class="w-full py-2 text-red-500 text-[10px] font-black border border-red-900/50 rounded uppercase">Logout</button>
             </div>
         </aside>
-        
-        <main class="p-4 md:p-10 overflow-y-auto relative">
-            <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
-            
-            <div id="bulkEditArea" class="hidden max-w-4xl mx-auto space-y-4 pb-20">
-                <textarea id="bulkInput" class="w-full h-[60vh] input-bg border rounded-lg p-4 font-mono text-sm outline-none focus:border-blue-500" placeholder="One task per line..."></textarea>
-                <div class="flex gap-2">
-                    <button onclick="saveBulk()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Save Changes</button>
-                    <button onclick="toggleBulkEdit()" class="bg-gray-800 px-6 py-2 rounded-lg font-bold text-sm text-white">Cancel</button>
-                </div>
-            </div>
 
-            <div id="fileManagerOverlay" class="hidden absolute inset-0 bg-[#121212]/95 z-[100] p-4 md:p-10 overflow-y-auto">
-                <div class="max-w-2xl mx-auto">
-                    <div class="flex justify-between items-center mb-8"><h2 class="text-2xl font-black text-blue-500 uppercase tracking-tighter">Manage Project Registry</h2><button onclick="hideFileManager()" class="text-2xl opacity-50 hover:opacity-100">✕</button></div>
-                    <div class="card-bg border p-6 rounded-xl mb-8">
-                        <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Add / Create Project</h3>
-                        <div class="flex gap-2">
-                            <input type="text" id="bulkFileName" maxlength="20" placeholder="NAME (E.G. WORK)" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500 uppercase">
-                            <button onclick="addProjectFromBulk()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add to List</button>
-                        </div>
-                    </div>
-                    <div id="bulkFileList" class="space-y-2"></div>
-                </div>
-            </div>
+        <div id="overlay" class="overlay" onclick="toggleSidebar()"></div>
+
+        <main class="overflow-y-auto bg-[#121212] p-4 md:p-10">
+            <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full max-w-4xl mx-auto block mb-6 bg-[#1e1e1e] border border-[#333] rounded-lg px-4 py-3 text-sm outline-none">
+            <div id="todoList" class="max-w-4xl mx-auto space-y-1.5 pb-32"></div>
         </main>
     </div>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false;
+        let dbx, allTasks = [], activeFilters = new Set(), editingIndex = null, isSyncing = false;
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
-            if (token) { dbx = new Dropbox.Dropbox({ accessToken: token }); await loadTasks(); updateFileUI(); setInterval(loadTasks, 30000); } 
-            else { handleAuth(); }
+            if (token) { 
+                dbx = new Dropbox.Dropbox({ accessToken: token }); 
+                await loadTasks(); 
+                updateFileUI();
+                setInterval(() => { if(editingIndex === null) loadTasks(); }, 30000);
+            } else { handleAuth(); }
         }
 
         async function loadTasks() {
-            if (!dbx || isSyncing || editingBulk) return;
-            isSyncing = true; setStatus(`Syncing...`, true);
+            if (!dbx || isSyncing) return;
+            isSyncing = true; setStatus('syncing');
             try {
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
-                allTasks = text.split('\n').filter(t => t.trim() !== ""); render();
-                setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
-            } catch (e) { 
-                if (e.status === 404 || (e.error && JSON.stringify(e.error).includes("not_found"))) {
-                    allTasks = []; render(); await saveTasks();
-                } else { setStatus("Sync Error"); }
-            } finally { isSyncing = false; }
+                allTasks = text.split('\n').filter(t => t.trim() !== "");
+                render();
+                setStatus('ready');
+            } catch (e) { setStatus('error'); }
+            finally { isSyncing = false; }
         }
 
         async function saveTasks() {
             if (!dbx) return;
-            isSyncing = true; setStatus("Saving...", true);
-            try { 
-                const contents = allTasks.length > 0 ? allTasks.join('\n') : " ";
-                await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
-                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
-            } catch (e) { setStatus("Save Error"); }
-            finally { isSyncing = false; }
+            setStatus('saving');
+            try {
+                const contents = allTasks.join('\n') || " ";
+                await dbx.filesUpload({ path: currentFile, contents, mode: {".tag":"overwrite"} });
+                setStatus('ready');
+            } catch (e) { setStatus('error'); }
         }
 
         function render() {
-            if (editingBulk) return;
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
-            const sortVal = document.getElementById('sortOrder').value;
-            let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
+            const sort = document.getElementById('sortOrder').value;
+            document.getElementById('bulkEdit').value = allTasks.join('\n');
+
+            let filtered = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
             
-            if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
-            if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
-            if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
-            
+            if (search) filtered = filtered.filter(t => t.text.toLowerCase().includes(search));
             activeFilters.forEach(f => {
-                if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
-                else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
-                else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
-                else if (f === 'NO_DUE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
-                else if (f.startsWith('DATE:')) displayTasks = displayTasks.filter(t => t.meta.due === f.split(':')[1] || t.meta.isHeader);
-                else if (f.startsWith('PRIO:')) displayTasks = displayTasks.filter(t => t.meta.prio === f.split(':')[1] || t.meta.isHeader);
-                else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
+                filtered = filtered.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
-            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+            if (sort === 'prio') {
+                filtered.sort((a,b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
+            }
 
-            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
-            list.innerHTML = displayTasks.map(item => {
-                if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
+            list.innerHTML = filtered.map(item => {
+                if (item.meta.isHeader) return `<div class="h1-style">${item.text.replace(/^#+\s*/, '')}</div>`;
+                
                 const isDone = item.text.startsWith('x ');
-                const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
-                let html = item.text.replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`).replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>').replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>').replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
-                return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
-                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
-                    <div class="flex-1 text-[13px] leading-tight">${html}</div>
-                    <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
+                
+                if (editingIndex === item.i) {
+                    return `<div class="edit-container">
+                        <input type="text" id="editBox" class="edit-input" value="${item.text}" autofocus>
+                        <div class="flex gap-1 p-1">
+                            <button onclick="saveEdit(${item.i})" class="flex-1 bg-blue-600 py-3 rounded font-bold text-xs uppercase">Save</button>
+                            <button onclick="cancelEdit()" class="bg-gray-800 px-6 py-3 rounded font-bold text-xs">✕</button>
+                        </div>
+                    </div>`;
+                }
+
+                return `<div class="flex items-center p-4 bg-[#1e1e1e] border-l-4 ${item.meta.prio === 'A' ? 'border-orange-500' : 'border-blue-500'} ${isDone ? 'opacity-30' : ''} rounded-r-lg shadow-sm">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-6 h-6 mr-4 accent-blue-500 btn-touch">
+                    <div class="flex-1 text-[15px] py-1" onclick="startEdit(${item.i})">${item.text}</div>
+                    <button onclick="deleteTask(${item.i})" class="text-gray-600 px-4 py-2 btn-touch">✕</button>
                 </div>`;
             }).join('');
-            updateSidebar();
-        }
-
-        function updateSidebar() {
-            const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
-            const dateCats = ['OVERDUE', 'TODAY', 'UPCOMING', 'NO_DUE'];
-            const taskMatches = (task, ignoreFilters = []) => {
-                if (task.text.startsWith('x ') || task.meta.isHeader) return false;
-                return Array.from(activeFilters).every(f => {
-                    if (ignoreFilters.includes(f)) return true;
-                    if (f === 'OVERDUE') return task.meta.isOverdue;
-                    if (f === 'TODAY') return task.meta.isToday;
-                    if (f === 'UPCOMING') return task.meta.isUpcoming;
-                    if (f === 'NO_DUE') return !task.meta.due;
-                    if (f.startsWith('DATE:')) return task.meta.due === f.split(':')[1];
-                    if (f.startsWith('PRIO:')) return task.meta.prio === f.split(':')[1];
-                    return task.text.includes(f);
-                });
-            };
-            const dateCounts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
-            tasksWithMeta.forEach(t => { if (taskMatches(t, dateCats)) { if (t.meta.isOverdue) dateCounts.OVERDUE++; else if (t.meta.isToday) dateCounts.TODAY++; else if (t.meta.isUpcoming) dateCounts.UPCOMING++; if (!t.meta.due) dateCounts.NO_DUE++; } });
-            document.getElementById('dateList').innerHTML = [{ label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' }, { label: 'Today', key: 'TODAY', color: 'text-yellow-500' }, { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }].map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
             
-            const specificDateMap = {};
-            tasksWithMeta.forEach(t => { if (t.meta.due) { const key = `DATE:${t.meta.due}`; if (taskMatches(t, [key])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
-            document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => `<div onclick="toggleFilter('DATE:${d}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has('DATE:'+d) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`).join('');
-
-            const updateTags = (id, type, regex, color) => {
-                const tagMap = {};
-                tasksWithMeta.forEach(t => { 
-                    const tags = type === 'PRIO' ? (t.meta.prio ? [`PRIO:${t.meta.prio}`] : []) : (t.text.match(regex) || []);
-                    tags.forEach(tag => { if (taskMatches(t, [tag])) tagMap[tag] = (tagMap[tag] || 0) + 1; });
-                });
-                document.getElementById(id).innerHTML = Object.entries(tagMap).sort().map(([tag, count]) => `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color} hover:bg-white/5"><span>${tag.replace('PRIO:','(').replace(/$/, type==='PRIO'?')':'')}</span><span class="opacity-40">${count}</span></div>`).join('') || '<div class="opacity-30 italic text-[10px] p-2">None</div>';
-            };
-            updateTags('priorityFilterList', 'PRIO', null, 'text-orange-400');
-            updateTags('projectList', 'PROJ', /\+[\w\-]+/g, 'text-blue-400');
-            updateTags('contextList', 'CTX', /@[\w\-]+/g, 'text-green-400');
+            updateSidebarUI();
         }
 
-        function getMeta(t) {
-            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
-            const today = new Date(); today.setHours(0,0,0,0);
-            const taskD = d ? new Date(d[1] + 'T00:00:00') : null;
-            return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null, due: d ? d[1] : null, isOverdue: !t.startsWith('x ') && taskD && taskD < today, isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(), isUpcoming: !t.startsWith('x ') && taskD && taskD > today };
+        // Logic Functions
+        function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById('editBox').focus(), 50); }
+        function saveEdit(i) { const v = document.getElementById('editBox').value; if(v){ allTasks[i] = v; editingIndex = null; render(); saveTasks(); } }
+        function cancelEdit() { editingIndex = null; render(); }
+        function toggleTask(i) { 
+            allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; 
+            render(); saveTasks(); 
         }
-
-        function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
+        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i,1); render(); saveTasks(); } }
+        function addTask() { 
+            const inp = document.getElementById('newTodo'); 
+            if(!inp.value.trim()) return; 
+            allTasks.push(new Date().toISOString().split('T')[0] + " " + inp.value.trim()); 
+            inp.value=""; render(); saveTasks(); 
+        }
+        function applyBulk() { allTasks = document.getElementById('bulkEdit').value.split('\n').filter(t=>t.trim()); render(); saveTasks(); toggleSidebar(); }
+        
+        // Navigation
+        function toggleSidebar() { 
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('overlay').classList.toggle('active');
+        }
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
-        function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
-        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
-        function addTask() { const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val; allTasks.push(val); inp.value = ""; render(); saveTasks(); }
-        function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
-        
-        function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
-        function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
-        
-        function toggleBulkEdit() {
-            editingBulk = !editingBulk;
-            document.getElementById('todoList').classList.toggle('hidden', editingBulk);
-            document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk);
-            if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n');
-            else render();
-        }
-        function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n').filter(t => t.trim() !== ""); toggleBulkEdit(); saveTasks(); }
-        
-        function exportFile() {
-            const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = currentFile.replace('/', '');
-            a.click(); URL.revokeObjectURL(url);
+        function getMeta(t) { return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null }; }
+        function setStatus(s) { 
+            const colors = { syncing: 'bg-blue-500 animate-pulse', ready: 'bg-green-500', error: 'bg-red-500', saving: 'bg-yellow-500' };
+            document.getElementById('syncStatus').className = `w-2 h-2 rounded-full ${colors[s]}`;
         }
 
-        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
-        function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
-        function handleAuth() { const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); const token = urlParams.get('access_token'); if (token) { localStorage.setItem('dbx_token', token); window.location.hash = ""; location.reload(); } else { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; } }
-        function updateFileUI() { 
-            const list = document.getElementById('fileList'); 
-            const cleanName = currentFile === '/todo.txt' ? 'todo.txt' : currentFile.replace('/todo_', '').replace('.txt', '');
-            document.getElementById('activeFileNameDisplay').innerText = cleanName; 
-            list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted hover:bg-white/5'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
+        // File Management
+        function updateFileUI() {
+            document.getElementById('fileList').innerHTML = knownFiles.map(f => `
+                <div onclick="switchFile('${f}')" class="p-3 rounded text-xs font-black uppercase cursor-pointer ${f === currentFile ? 'file-active' : 'text-gray-500'}">
+                    ${f.replace('/todo_', '').replace('.txt','')}
+                </div>
+            `).join('');
         }
-        async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; updateFileUI(); await loadTasks(); if(document.getElementById('sidebar').classList.contains('sidebar-open')) toggleSidebar(); }
-        
-        function showFileManager() { document.getElementById('fileManagerOverlay').classList.remove('hidden'); renderBulkList(); }
-        function hideFileManager() { document.getElementById('fileManagerOverlay').classList.add('hidden'); }
-        function renderBulkList() {
-            const list = document.getElementById('bulkFileList');
-            list.innerHTML = knownFiles.map(f => `<div class="flex items-center justify-between p-4 card-bg border rounded-lg"><span class="font-black text-sm uppercase">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</span>${f !== '/todo.txt' ? `<button onclick="removeFileBulk('${f}')" class="text-red-500 text-xs font-bold uppercase tracking-widest border border-red-500/30 px-3 py-1 rounded">Remove</button>` : '<span class="text-[9px] opacity-30 uppercase font-black">Default Base</span>'}</div>`).join('');
+        async function switchFile(p) { currentFile = p; localStorage.setItem('last_todo_file', p); allTasks=[]; await loadTasks(); updateFileUI(); if(window.innerWidth < 768) toggleSidebar(); }
+        function createNewFile() { 
+            const inp = document.getElementById('newFileName'); 
+            const raw = inp.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').substring(0,20); 
+            if(raw) { 
+                const p = `/todo_${raw}.txt`; 
+                if(!knownFiles.includes(p)) knownFiles.push(p); 
+                localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); 
+                switchFile(p); inp.value=""; 
+            } 
         }
-        function removeFileBulk(path) { if (confirm(`Remove "${path}" from your sidebar?`)) { knownFiles = knownFiles.filter(f => f !== path); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); if (currentFile === path) switchFile('/todo.txt'); renderBulkList(); updateFileUI(); } }
-        function addProjectFromBulk() {
-            const input = document.getElementById('bulkFileName');
-            const rawName = input.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').substring(0, 20);
-            if (!rawName) return;
-            const fullPath = `/todo_${rawName}.txt`;
-            if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); renderBulkList(); updateFileUI(); }
-            input.value = "";
+
+        function updateSidebarUI() {
+            const projects = {};
+            allTasks.forEach(t => {
+                const matches = t.match(/\+[\w\-]+/g);
+                if (matches) matches.forEach(p => projects[p] = (projects[p] || 0) + 1);
+            });
+            document.getElementById('projectFilters').innerHTML = Object.entries(projects).map(([p, count]) => `
+                <div onclick="toggleFilter('${p}')" class="flex justify-between p-2 rounded text-xs cursor-pointer ${activeFilters.has(p) ? 'bg-blue-500/20 text-blue-400 font-bold' : 'text-gray-400'}">
+                    <span>${p}</span><span>${count}</span>
+                </div>
+            `).join('');
         }
+        function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function hardLogout() { localStorage.clear(); location.reload(); }
+        function handleAuth() { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; }
+
         init();
     </script>
 </body>
