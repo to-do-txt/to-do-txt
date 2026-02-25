@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.24</title>
+    <title>to-do-txt v3.6.26</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -23,10 +23,11 @@
             #sidebar.sidebar-open { transform: translateX(0); }
         }
 
-        /* Status Colors */
+        /* Dynamic Active States */
         .btn-active-green { background-color: #22c55e !important; color: #000 !important; font-weight: 900; border-color: #22c55e !important; }
         .btn-active-purple { background-color: #a855f7 !important; color: #000 !important; font-weight: 900; border-color: #a855f7 !important; }
         .btn-active-orange { background-color: #f97316 !important; color: #000 !important; font-weight: 900; border-color: #f97316 !important; }
+        .btn-active-blue { background-color: #3b82f6 !important; color: #fff !important; font-weight: 900; border-color: #3b82f6 !important; }
 
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
@@ -58,10 +59,11 @@
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
-                    <div class="hidden md:flex gap-3 text-[10px] font-black uppercase">
+                    <div class="hidden md:flex gap-2 text-[10px] font-black uppercase">
                         <button id="dt-toggle-headers" onclick="toggleHeaderVisibility()" class="px-2 py-1 rounded border border-green-500/40 text-green-500 transition-all">Headers</button>
                         <button id="dt-toggle-done" onclick="toggleCompletedVisibility()" class="px-2 py-1 rounded border border-purple-500/40 text-purple-500 transition-all">Done</button>
                         <button id="dt-toggle-raw" onclick="toggleRawEdit()" class="px-2 py-1 rounded border border-orange-500/40 text-orange-500 transition-all">Raw</button>
+                        <button onclick="saveTasks()" class="px-2 py-1 rounded border border-blue-500/40 text-blue-500 hover:bg-blue-600 hover:text-white transition-all">Backup</button>
                     </div>
                 </div>
             </div>
@@ -80,16 +82,32 @@
     <div class="app-grid">
         <aside id="sidebar" class="card-bg border-r overflow-hidden flex flex-col">
             <div class="p-6 flex justify-between items-center md:hidden border-b border-gray-800">
-                <span class="font-black text-blue-500 uppercase text-xs tracking-widest">Filter Menu</span>
+                <span class="font-black text-blue-500 uppercase text-xs tracking-widest">Filters</span>
                 <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
             </div>
             
             <div class="flex-1 overflow-y-auto p-6 space-y-8">
                 <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
-                <div id="dateList" class="space-y-1 text-xs"></div>
-                <div id="priorityList" class="space-y-1 text-xs"></div>
-                <div id="projectList" class="space-y-1 text-xs"></div>
-                <div id="contextList" class="space-y-1 text-xs pb-24"></div>
+                
+                <section>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Filters</h2>
+                    <div id="dateList" class="space-y-1 text-xs"></div>
+                </section>
+
+                <section>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2>
+                    <div id="priorityList" class="space-y-1 text-xs"></div>
+                </section>
+
+                <section>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Projects</h2>
+                    <div id="projectList" class="space-y-1 text-xs"></div>
+                </section>
+
+                <section class="pb-24">
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Contexts</h2>
+                    <div id="contextList" class="space-y-1 text-xs"></div>
+                </section>
             </div>
 
             <div class="p-6 border-t border-gray-800 bg-black/20">
@@ -100,7 +118,7 @@
                     <button onclick="saveTasks()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v3.6.24</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v3.6.26</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -118,7 +136,6 @@
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null, isSyncing = false;
-        let suggestionIdx = -1;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
@@ -128,11 +145,10 @@
         }
 
         function updateToggleStyles() {
-            const isRawOpen = !document.getElementById('rawEditorContainer').classList.contains('hidden');
             const configs = [
                 { ids: ['dt-toggle-headers', 'mb-toggle-headers'], active: showHeaders, cls: 'btn-active-green' },
                 { ids: ['dt-toggle-done', 'mb-toggle-done'], active: showCompleted, cls: 'btn-active-purple' },
-                { ids: ['dt-toggle-raw', 'mb-toggle-raw'], active: isRawOpen, cls: 'btn-active-orange' }
+                { ids: ['dt-toggle-raw', 'mb-toggle-raw'], active: !document.getElementById('rawEditorContainer').classList.contains('hidden'), cls: 'btn-active-orange' }
             ];
             configs.forEach(c => c.ids.forEach(id => {
                 const el = document.getElementById(id);
@@ -220,24 +236,43 @@
 
         function updateSidebar(filtered) {
             const counts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NODATE: 0 };
+            const specificDates = {};
             filtered.forEach(t => {
                 if(!t.text.startsWith('x ') && !t.meta.isHeader) {
                     if (t.meta.isOverdue) counts.OVERDUE++;
                     if (t.meta.isToday) counts.TODAY++;
                     if (t.meta.isUpcoming) counts.UPCOMING++;
                     if (!t.meta.due) counts.NODATE++;
+                    if (t.meta.due) specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
                 }
             });
-            const updateCat = (id, regex, color, labels = null) => {
+
+            let dateHtml = '';
+            const addDateItem = (label, key, color) => {
+                if (counts[key] > 0 || activeFilters.has(key)) {
+                    const active = activeFilters.has(key) ? 'bg-blue-600/30 font-bold' : color;
+                    dateHtml += `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 font-bold"><span>${label}</span><span class="opacity-60 font-black">${counts[key]}</span></div>`;
+                }
+            };
+            addDateItem('Overdue', 'OVERDUE', 'text-red-500');
+            addDateItem('Today', 'TODAY', 'text-yellow-500');
+            addDateItem('Upcoming', 'UPCOMING', 'text-green-400');
+            addDateItem('No Due Date', 'NODATE', 'text-gray-500');
+            
+            Object.keys(specificDates).sort().forEach(d => {
+                const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
+                dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-2 rounded cursor-pointer ${active} border-l border-gray-800 ml-2 hover:bg-white/5"><span>${d}</span><span class="opacity-40">${specificDates[d]}</span></div>`;
+            });
+            document.getElementById('dateList').innerHTML = dateHtml || '<div class="opacity-30 italic">No dates</div>';
+
+            const updateCat = (id, regex, color) => {
                 const c = {};
-                if (labels) Object.keys(labels).forEach(k => c[k] = labels[k]);
                 filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
-                document.getElementById(id).innerHTML = Object.entries(c).filter(([_, v]) => v > 0).map(([tag, count]) => {
+                document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
                     const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
                     return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
-                }).join('');
+                }).join('') || '<div class="opacity-30 italic">Empty</div>';
             };
-            updateCat('dateList', /due:(\d{4}-\d{2}-\d{2})/g, 'text-gray-400', counts);
             updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
             updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
             updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
@@ -274,7 +309,12 @@
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
         function finishEdit(i, val) { if (val.trim()) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
-        function addTask() { const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; allTasks.push(inp.value.trim()); inp.value = ""; render(); saveTasks(); }
+        function addTask() { 
+            const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; 
+            let val = inp.value.trim();
+            if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val;
+            allTasks.push(val); inp.value = ""; render(); saveTasks(); 
+        }
         function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
         function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
