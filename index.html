@@ -3,27 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.19</title>
+    <title>to-do-txt v3.6.20</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        
-        .app-grid { display: grid; grid-template-columns: 0px 1fr; flex: 1; overflow: hidden; transition: grid-template-columns 0.2s ease; }
-        .app-grid.sidebar-pinned { grid-template-columns: 280px 1fr; }
-        
-        #sidebar { 
-            position: fixed; top: 0; left: -280px; bottom: 0; width: 280px; z-index: 100; 
-            transition: left 0.2s ease; box-shadow: 10px 0 30px rgba(0,0,0,0.5);
-            display: flex; flex-direction: column; height: 100%;
+        .app-grid { display: grid; grid-template-columns: 280px 1fr; flex: 1; overflow: hidden; }
+        @media (max-width: 768px) { 
+            .app-grid { grid-template-columns: 1fr; } 
+            .sidebar-hidden { display: none; }
+            #sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.5); }
         }
-        .sidebar-visible { left: 0 !important; }
-        
-        @media (min-width: 768px) {
-            .app-grid.sidebar-pinned #sidebar { position: relative; left: 0; box-shadow: none; border-right: 1px solid var(--border); }
-        }
-
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
@@ -32,79 +23,85 @@
         #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto; }
         .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
         .suggestion-item:hover, .suggestion-active { background-color: #3b82f6; color: white; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
     </style>
 </head>
 <body class="font-sans">
 
-    <header class="p-4 md:p-6 card-bg border-b shadow-lg relative z-50">
+    <header class="p-6 card-bg border-b shadow-lg relative z-50">
         <div class="max-w-6xl mx-auto flex flex-col gap-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <button id="menuBtn" onclick="toggleSidebar()" class="text-muted text-xl p-1">☰</button>
-                    <div class="font-black text-xl md:text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <div class="flex items-center gap-2 px-2 py-1 bg-black/20 rounded-full border border-white/5">
-                        <div id="syncIndicator" class="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
-                        <span id="statusText" class="text-[8px] md:text-[9px] font-bold uppercase tracking-widest text-gray-400">Ready</span>
+                    <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl p-1">☰</button>
+                    <div class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
+                    <div class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
+                        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
+                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60">Ready</span>
                     </div>
                 </div>
                 
-                <div class="flex items-center gap-3">
-                    <span id="viewCounter" class="text-[9px] font-bold uppercase tracking-widest text-blue-400/60 hidden sm:inline">0/0</span>
-                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-1 text-[9px] font-bold uppercase outline-none cursor-pointer">
+                <div class="flex items-center gap-4">
+                    <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
+                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-3 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
+                    <div class="flex gap-4 text-[10px] font-black uppercase tracking-widest">
+                        <button onclick="toggleHeaderVisibility()" class="text-green-500 hover:opacity-70">Headers</button>
+                        <button onclick="toggleCompletedVisibility()" class="text-purple-500 hover:opacity-70">Done</button>
+                        <button onclick="toggleRawEdit()" class="text-orange-500 hover:opacity-70">Raw</button>
+                        <button onclick="hardLogout()" class="text-gray-500 hover:text-red-500">Logout</button>
+                    </div>
                 </div>
             </div>
             
-            <div class="flex flex-col md:flex-row gap-2 md:gap-3">
+            <div class="flex flex-col md:flex-row gap-3">
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                    <button onclick="addTask()" class="bg-blue-600 px-5 md:px-6 py-2 rounded-lg font-bold text-sm text-white hover:bg-blue-500">Add</button>
+                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
                     <div id="suggestions" class="hidden absolute top-full left-0 w-full card-bg border rounded-b-md mt-1"></div>
                 </div>
             </div>
         </div>
     </header>
 
-    <div id="appGrid" class="app-grid sidebar-pinned">
-        <aside id="sidebar" class="card-bg">
-            <div class="p-6 pb-2 flex justify-between items-center border-b border-gray-800">
-                <div class="flex items-center gap-2">
-                    <span class="font-bold text-blue-500 uppercase text-[10px] tracking-widest">Control Center</span>
-                    <button id="pinBtn" onclick="togglePin()" class="hidden md:block text-muted hover:text-blue-500 text-xs" title="Pin Sidebar">📌</button>
-                </div>
-                <button onclick="toggleSidebar()" class="text-xl px-2 text-gray-500 hover:text-white">✕</button>
+    <div class="app-grid">
+        <aside id="sidebar" class="p-6 border-r overflow-y-auto card-bg sidebar-hidden md:block flex flex-col h-full">
+            <div class="flex justify-between items-center mb-8 md:hidden">
+                <span class="font-bold text-blue-500 uppercase text-xs">Filters</span>
+                <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-6 pt-4 space-y-8">
-                <div>
-                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">View Control</h2>
-                    <div class="space-y-2">
-                        <button onclick="toggleHeaderVisibility()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[10px] font-bold hover:bg-blue-500/10 transition-colors">Toggle Headers</button>
-                        <button onclick="toggleCompletedVisibility()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[10px] font-bold hover:bg-blue-500/10 transition-colors">Toggle Completed</button>
-                        <button onclick="toggleRawEdit()" class="w-full text-left px-3 py-2 rounded bg-white/5 border border-white/5 text-[10px] font-bold hover:bg-blue-500/10 transition-colors">Raw Editor</button>
-                        <button onclick="hardLogout()" class="w-full text-left px-3 py-2 rounded bg-red-500/5 border border-red-500/10 text-[10px] font-bold text-red-400 hover:bg-red-500/20">Logout</button>
-                    </div>
+            <button onclick="resetFilters()" class="w-full mb-8 text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Reset All</button>
+            
+            <div class="mb-8 overflow-y-auto pr-2">
+                <div class="mb-8">
+                    <h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Date Filters</h2>
+                    <div id="dateList" class="space-y-1 text-xs"></div>
                 </div>
-
-                <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase hover:bg-blue-500 hover:text-white transition-all">Clear Filters</button>
-                
-                <div><h2 class="text-[10px] font-black text-red-500/60 mb-3 uppercase tracking-widest">Dates</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
-                <div><h2 class="text-[10px] font-black text-gray-500 mb-3 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
-                <div><h2 class="text-[10px] font-black text-blue-500/50 mb-3 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
-                <div class="pb-10"><h2 class="text-[10px] font-black text-green-500/50 mb-3 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
+                <div class="mb-8">
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2>
+                    <div id="priorityList" class="space-y-1 text-xs"></div>
+                </div>
+                <div class="mb-8">
+                    <h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2>
+                    <div id="projectList" class="space-y-1 text-xs"></div>
+                </div>
+                <div class="mb-12">
+                    <h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2>
+                    <div id="contextList" class="space-y-1 text-xs"></div>
+                </div>
             </div>
             
-            <div class="p-4 border-t border-gray-800 opacity-40 bg-black/10">
-                <div id="sidebarOpenTasks" class="text-[9px] font-black uppercase">Tasks: 0</div>
-                <div class="text-[9px] font-black uppercase">Build: v3.6.19</div>
+            <div class="mt-auto pt-6 border-t border-gray-800 opacity-40">
+                <div class="text-[9px] font-black uppercase">v3.6.20 Rollback</div>
             </div>
         </aside>
         
-        <main class="p-4 md:p-10 overflow-y-auto">
+        <main class="p-6 md:p-10 overflow-y-auto">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
                 <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-6 border rounded-xl resize-none mb-4 outline-none"></textarea>
@@ -116,37 +113,12 @@
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null, isSyncing = false;
-        let suggestionIdx = -1, isPinned = true;
+        let suggestionIdx = -1;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
-            if (token) { 
-                dbx = new Dropbox.Dropbox({ accessToken: token }); 
-                await loadTasks(); 
-                setInterval(loadTasks, 30000); 
-                if(window.innerWidth > 768 && isPinned) {
-                    document.getElementById('sidebar').classList.add('sidebar-visible');
-                    document.getElementById('appGrid').classList.add('sidebar-pinned');
-                }
-            } else { handleAuth(); }
-        }
-
-        function togglePin() {
-            isPinned = !isPinned;
-            const grid = document.getElementById('appGrid');
-            const side = document.getElementById('sidebar');
-            if(isPinned) {
-                grid.classList.add('sidebar-pinned');
-                side.classList.add('sidebar-visible');
-            } else {
-                grid.classList.remove('sidebar-pinned');
-                side.classList.remove('sidebar-visible');
-            }
-        }
-
-        function toggleSidebar() {
-            const side = document.getElementById('sidebar');
-            side.classList.toggle('sidebar-visible');
+            if (token) { dbx = new Dropbox.Dropbox({ accessToken: token }); await loadTasks(); setInterval(loadTasks, 30000); }
+            else { handleAuth(); }
         }
 
         function handleAuth() {
@@ -161,7 +133,7 @@
 
         function setStatus(text, active = false) {
             document.getElementById('statusText').innerText = text;
-            document.getElementById('syncIndicator').className = `w-1.5 h-1.5 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
+            document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
         }
 
         async function loadTasks() {
@@ -227,7 +199,7 @@
                 return `<div class="group flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
-                    <button onclick="deleteTask(${item.i})" class="md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
+                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
                 </div>`;
             }).join('');
             updateSidebar(displayTasks);
@@ -270,11 +242,44 @@
                 document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
                     const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
                     return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
-                }).join('') || '<div class="px-2 opacity-30 italic text-[10px]">Empty</div>';
+                }).join('') || '<div class="px-2 opacity-30 italic">Empty</div>';
             };
             updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
             updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
             updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
-            
-            const openCount = allTasks.filter(t => t.trim() !== "" && !t.startsWith('x ') && !t.startsWith('#')).length;
-            document.getElementById('sidebarOpenTasks').innerText = `Tasks: ${openCount
+        }
+
+        function getMeta(t) {
+            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
+            const due = d ? d[1] : null;
+            if (!due) return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null };
+            const taskDate = new Date(due + 'T00:00:00');
+            const today = new Date(); today.setHours(0,0,0,0);
+            const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+            const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
+            return {
+                isHeader: t.startsWith('#'),
+                prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
+                due,
+                isOverdue: !t.startsWith('x ') && taskDate < today,
+                isToday: !t.startsWith('x ') && taskDate.getTime() === today.getTime(),
+                isTomorrow: !t.startsWith('x ') && taskDate.getTime() === tomorrow.getTime(),
+                isUpcoming: !t.startsWith('x ') && taskDate > today && taskDate <= nextWeek
+            };
+        }
+
+        function handleInput(e) {
+            const val = e.target.value; const cursor = e.target.selectionStart; const lastWord = val.slice(0, cursor).split(/\s/).pop();
+            const sugBox = document.getElementById('suggestions');
+            if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
+                const prefix = lastWord[0];
+                const tags = [...new Set(allTasks.flatMap(t => t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))].filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
+                if (tags.length) { sugBox.innerHTML = tags.map((t, i) => `<div class="suggestion-item ${i===suggestionIdx?'suggestion-active':''}" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
+            }
+            sugBox.classList.add('hidden'); suggestionIdx = -1;
+        }
+
+        function handleInputKeyDown(e) {
+            const s = document.querySelectorAll('.suggestion-item');
+            if (!document.getElementById('suggestions').classList.contains('hidden')) {
+                if (e.key === 'ArrowDown') { e.preventDefaul
