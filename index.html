@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.8</title>
+    <title>to-do-txt v4.1.9</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -28,6 +28,8 @@
         .toggle-icon::before { content: "[+]"; font-family: monospace; font-weight: bold; color: #3b82f6; font-size: 14px; }
         details[open] .toggle-icon::before { content: "[-]"; color: #ef4444; }
         details[open] summary { color: #60a5fa; margin-bottom: 0.5rem; }
+        .btn-toggle { font-size: 10px; font-weight: 900; padding: 4px 10px; border-radius: 4px; border: 1px solid #333; text-transform: uppercase; transition: all 0.2s; }
+        .btn-toggle.active { background: #3b82f6; border-color: #3b82f6; color: white; }
     </style>
 </head>
 <body class="font-sans">
@@ -60,6 +62,13 @@
                     <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
                 </div>
             </div>
+            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
+                <button onclick="toggleCompleted()" id="toggleCompBtn" class="btn-toggle active">Completed</button>
+                <button onclick="toggleHeaders()" id="toggleHeadBtn" class="btn-toggle active">Headers</button>
+                <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
+                <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
+                <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Export</button>
+            </div>
         </div>
     </header>
 
@@ -75,69 +84,39 @@
                     <div id="fileList" class="space-y-1 mb-4"></div>
                     <button onclick="showFileManager()" class="w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all">Manage Project List</button>
                 </section>
-
                 <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
-
-                <section>
-                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Dashboard</h2>
-                    <div id="dateList" class="space-y-1 text-xs"></div>
-                </section>
-
-                <details open class="group">
-                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                        Specific Dates <span class="toggle-icon"></span>
-                    </summary>
-                    <div id="specificDateList" class="space-y-1 text-xs pt-2"></div>
-                </details>
-
-                <details open class="group">
-                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                        Priorities <span class="toggle-icon"></span>
-                    </summary>
-                    <div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div>
-                </details>
-
-                <details open class="group">
-                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                        Projects <span class="toggle-icon"></span>
-                    </summary>
-                    <div id="projectList" class="space-y-1 text-xs pt-2"></div>
-                </details>
-
-                <details open class="group pb-24">
-                    <summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                        Contexts <span class="toggle-icon"></span>
-                    </summary>
-                    <div id="contextList" class="space-y-1 text-xs pt-2"></div>
-                </details>
+                <section><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Dashboard</h2><div id="dateList" class="space-y-1 text-xs"></div></section>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Specific Dates <span class="toggle-icon"></span></summary><div id="specificDateList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Priorities <span class="toggle-icon"></span></summary><div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Projects <span class="toggle-icon"></span></summary><div id="projectList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.8</span>
-                    <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
-                </div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.9</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
         <main class="p-4 md:p-10 overflow-y-auto relative">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
             
+            <div id="bulkEditArea" class="hidden max-w-4xl mx-auto space-y-4 pb-20">
+                <textarea id="bulkInput" class="w-full h-[60vh] input-bg border rounded-lg p-4 font-mono text-sm outline-none focus:border-blue-500" placeholder="One task per line..."></textarea>
+                <div class="flex gap-2">
+                    <button onclick="saveBulk()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Save Changes</button>
+                    <button onclick="toggleBulkEdit()" class="bg-gray-800 px-6 py-2 rounded-lg font-bold text-sm text-white">Cancel</button>
+                </div>
+            </div>
+
             <div id="fileManagerOverlay" class="hidden absolute inset-0 bg-[#121212]/95 z-[100] p-4 md:p-10 overflow-y-auto">
                 <div class="max-w-2xl mx-auto">
-                    <div class="flex justify-between items-center mb-8">
-                        <h2 class="text-2xl font-black text-blue-500 uppercase tracking-tighter">Manage Project Registry</h2>
-                        <button onclick="hideFileManager()" class="text-2xl opacity-50 hover:opacity-100">✕</button>
-                    </div>
-                    
+                    <div class="flex justify-between items-center mb-8"><h2 class="text-2xl font-black text-blue-500 uppercase tracking-tighter">Manage Project Registry</h2><button onclick="hideFileManager()" class="text-2xl opacity-50 hover:opacity-100">✕</button></div>
                     <div class="card-bg border p-6 rounded-xl mb-8">
                         <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Add / Create Project</h3>
                         <div class="flex gap-2">
-                            <input type="text" id="bulkFileName" maxlength="20" placeholder="PROJECT NAME (E.G. WORK)" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500 uppercase">
+                            <input type="text" id="bulkFileName" maxlength="20" placeholder="NAME (E.G. WORK)" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500 uppercase">
                             <button onclick="addProjectFromBulk()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add to List</button>
                         </div>
-                        <p class="text-[10px] text-gray-500 mt-2 italic">* Sanitized to A-Z, 0-9, underscores only. Max 20 chars.</p>
                     </div>
-
                     <div id="bulkFileList" class="space-y-2"></div>
                 </div>
             </div>
@@ -146,7 +125,7 @@
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false;
+        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false;
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
 
@@ -157,20 +136,16 @@
         }
 
         async function loadTasks() {
-            if (!dbx || isSyncing) return;
+            if (!dbx || isSyncing || editingBulk) return;
             isSyncing = true; setStatus(`Syncing...`, true);
             try {
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
-                const newTasks = text.split('\n').filter(t => t.trim() !== "");
-                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
+                allTasks = text.split('\n').filter(t => t.trim() !== ""); render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
-                const isNotFound = e.status === 404 || (e.error && e.error.error_summary && e.error.error_summary.includes("path/not_found"));
-                if (isNotFound) {
-                    allTasks = []; render();
-                    setStatus("New File - Initializing...");
-                    await saveTasks();
+                if (e.status === 404 || (e.error && JSON.stringify(e.error).includes("not_found"))) {
+                    allTasks = []; render(); await saveTasks();
                 } else { setStatus("Sync Error"); }
             } finally { isSyncing = false; }
         }
@@ -187,11 +162,16 @@
         }
 
         function render() {
+            if (editingBulk) return;
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const sortVal = document.getElementById('sortOrder').value;
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
+            
+            if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
             if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+            
             activeFilters.forEach(f => {
                 if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
@@ -201,8 +181,10 @@
                 else if (f.startsWith('PRIO:')) displayTasks = displayTasks.filter(t => t.meta.prio === f.split(':')[1] || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
+
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
@@ -236,18 +218,12 @@
             };
             const dateCounts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
             tasksWithMeta.forEach(t => { if (taskMatches(t, dateCats)) { if (t.meta.isOverdue) dateCounts.OVERDUE++; else if (t.meta.isToday) dateCounts.TODAY++; else if (t.meta.isUpcoming) dateCounts.UPCOMING++; if (!t.meta.due) dateCounts.NO_DUE++; } });
-            document.getElementById('dateList').innerHTML = [
-                { label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' }, 
-                { label: 'Today', key: 'TODAY', color: 'text-yellow-500' }, 
-                { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, 
-                { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }
-            ].map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
+            document.getElementById('dateList').innerHTML = [{ label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' }, { label: 'Today', key: 'TODAY', color: 'text-yellow-500' }, { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }].map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
+            
             const specificDateMap = {};
             tasksWithMeta.forEach(t => { if (t.meta.due) { const key = `DATE:${t.meta.due}`; if (taskMatches(t, [key])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
-            document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => {
-                const key = `DATE:${d}`;
-                return `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(key) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`;
-            }).join('') || '<div class="opacity-30 italic text-[10px] p-2">No dates found</div>';
+            document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => `<div onclick="toggleFilter('DATE:${d}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has('DATE:'+d) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`).join('');
+
             const updateTags = (id, type, regex, color) => {
                 const tagMap = {};
                 tasksWithMeta.forEach(t => { 
@@ -274,63 +250,53 @@
         function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function addTask() { const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val; allTasks.push(val); inp.value = ""; render(); saveTasks(); }
         function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
+        
+        function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
+        function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
+        
+        function toggleBulkEdit() {
+            editingBulk = !editingBulk;
+            document.getElementById('todoList').classList.toggle('hidden', editingBulk);
+            document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk);
+            if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n');
+            else render();
+        }
+        function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n').filter(t => t.trim() !== ""); toggleBulkEdit(); saveTasks(); }
+        
+        function exportFile() {
+            const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = currentFile.replace('/', '');
+            a.click(); URL.revokeObjectURL(url);
+        }
+
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
         function handleAuth() { const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); const token = urlParams.get('access_token'); if (token) { localStorage.setItem('dbx_token', token); window.location.hash = ""; location.reload(); } else { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; } }
-        
         function updateFileUI() { 
             const list = document.getElementById('fileList'); 
             const cleanName = currentFile === '/todo.txt' ? 'todo.txt' : currentFile.replace('/todo_', '').replace('.txt', '');
             document.getElementById('activeFileNameDisplay').innerText = cleanName; 
-            list.innerHTML = knownFiles.map(f => `
-                <div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted hover:bg-white/5'}">
-                    ${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}
-                </div>`).join(''); 
+            list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted hover:bg-white/5'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
         }
-
         async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; updateFileUI(); await loadTasks(); if(document.getElementById('sidebar').classList.contains('sidebar-open')) toggleSidebar(); }
-
-        // FILE MANAGER OVERLAY LOGIC
-        function showFileManager() {
-            document.getElementById('fileManagerOverlay').classList.remove('hidden');
-            renderBulkList();
-        }
-        function hideFileManager() { document.getElementById('fileManagerOverlay').classList.add('hidden'); }
         
+        function showFileManager() { document.getElementById('fileManagerOverlay').classList.remove('hidden'); renderBulkList(); }
+        function hideFileManager() { document.getElementById('fileManagerOverlay').classList.add('hidden'); }
         function renderBulkList() {
             const list = document.getElementById('bulkFileList');
-            list.innerHTML = knownFiles.map(f => `
-                <div class="flex items-center justify-between p-4 card-bg border rounded-lg">
-                    <span class="font-black text-sm uppercase">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</span>
-                    ${f !== '/todo.txt' ? `<button onclick="removeFileBulk('${f}')" class="text-red-500 text-xs font-bold uppercase tracking-widest border border-red-500/30 px-3 py-1 rounded">Remove</button>` : '<span class="text-[9px] opacity-30 uppercase font-black">Default Base</span>'}
-                </div>
-            `).join('');
+            list.innerHTML = knownFiles.map(f => `<div class="flex items-center justify-between p-4 card-bg border rounded-lg"><span class="font-black text-sm uppercase">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</span>${f !== '/todo.txt' ? `<button onclick="removeFileBulk('${f}')" class="text-red-500 text-xs font-bold uppercase tracking-widest border border-red-500/30 px-3 py-1 rounded">Remove</button>` : '<span class="text-[9px] opacity-30 uppercase font-black">Default Base</span>'}</div>`).join('');
         }
-
-        function removeFileBulk(path) {
-            if (confirm(`Remove "${path}" from your sidebar?`)) {
-                knownFiles = knownFiles.filter(f => f !== path);
-                localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles));
-                if (currentFile === path) switchFile('/todo.txt');
-                renderBulkList();
-                updateFileUI();
-            }
-        }
-
+        function removeFileBulk(path) { if (confirm(`Remove "${path}" from your sidebar?`)) { knownFiles = knownFiles.filter(f => f !== path); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); if (currentFile === path) switchFile('/todo.txt'); renderBulkList(); updateFileUI(); } }
         function addProjectFromBulk() {
             const input = document.getElementById('bulkFileName');
             const rawName = input.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').substring(0, 20);
             if (!rawName) return;
             const fullPath = `/todo_${rawName}.txt`;
-            if (!knownFiles.includes(fullPath)) {
-                knownFiles.push(fullPath);
-                localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles));
-                renderBulkList();
-                updateFileUI();
-            }
+            if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); renderBulkList(); updateFileUI(); }
             input.value = "";
         }
-
         function hardLogout() { localStorage.clear(); location.reload(); }
         init();
     </script>
