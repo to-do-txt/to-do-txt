@@ -3,39 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.7</title>
+    <title>to-do-txt v3.6.11</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         .light-mode { --bg-app: #f4f4f5; --bg-card: #ffffff; --bg-input: #ffffff; --text-main: #18181b; --text-muted: #71717a; --border: #e4e4e7; }
-        
         body { background-color: var(--bg-app); color: var(--text-main); transition: background 0.1s; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        
         .app-grid { display: grid; grid-template-columns: 260px 1fr; flex: 1; overflow: hidden; }
         @media (max-width: 768px) { .app-grid { grid-template-columns: 1fr; } .sidebar-hidden { display: none; } }
-
-        .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; letter-spacing: 0.05em; }
+        .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
-        .h3-style { font-size: 0.75rem; font-weight: 900; color: #93c5fd; margin: 1rem 0 0.4rem 0; text-transform: uppercase; }
-
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
-        
-        .prio-a { border-color: #fb923c; } 
-        .prio-b { border-color: #facc15; }
-        .prio-none { border-color: #3b82f6; }
-        
-        #status-bar { z-index: 100; background: var(--bg-app); border-top: 1px solid var(--border); height: 35px; }
-        
-        #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); max-height: 200px; overflow-y: auto; }
+        .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
+        #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto; }
         .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
         .suggestion-item:hover, .suggestion-active { background-color: #3b82f6; color: white; }
-
-        /* Scrollbar styling for a cleaner look */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
     </style>
 </head>
 <body class="font-sans">
@@ -46,13 +32,13 @@
                 <div class="flex items-center gap-3">
                     <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl">☰</button>
                     <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase font-bold">Sync</button>
+                    <button onclick="loadTasks()" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded font-bold uppercase">Sync</button>
                 </div>
                 
                 <div class="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
-                    <button onclick="toggleTheme()" class="text-yellow-500">☀️ Light</button>
+                    <span id="viewCounter" class="text-blue-400 opacity-80">Showing 0/0</span>
                     <select id="sortOrder" onchange="render()" class="bg-transparent border border-gray-700 rounded px-1 text-[9px] outline-none">
-                        <option value="file">File Order</option>
+                        <option value="file" selected>File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                     </select>
@@ -62,12 +48,7 @@
                     <button onclick="hardLogout()" class="text-gray-500 hover:text-red-500">Logout</button>
                 </div>
             </div>
-
-            <div class="flex items-center gap-2">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="flex-1 input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
-                <div id="openPill" class="bg-blue-900/40 text-blue-400 px-3 py-1 rounded-full text-[10px] font-black border border-blue-500/30">0 OPEN</div>
-            </div>
-
+            <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="w-full input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
             <div class="relative flex gap-2">
                 <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="flex-1 input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500 transition-colors">Add</button>
@@ -78,33 +59,27 @@
 
     <div class="app-grid">
         <aside id="sidebar" class="p-6 border-r overflow-y-auto card-bg sidebar-hidden md:block">
-            <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded hover:bg-blue-500/10 uppercase transition-all">Reset All</button>
+            <button onclick="resetFilters()" class="w-full mb-6 text-[10px] font-bold border border-blue-500/50 text-blue-500 py-1 rounded uppercase hover:bg-blue-500/10 transition-all">Reset All</button>
             
-            <div id="pdCont" class="mb-8 hidden">
-                <h2 class="text-[10px] font-black text-red-500 mb-4 uppercase tracking-widest">Due</h2>
-                <div id="pastDueList" class="space-y-1 text-xs"></div>
-            </div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Date Filters</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
             <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
-            <div class="mb-8"><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-blue-500/50">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
-            <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest text-green-500/50">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
+            <div class="mb-8"><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
+            <div><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
         </aside>
         
         <main class="p-6 overflow-y-auto">
             <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
             <div id="rawEditorContainer" class="hidden h-full flex flex-col max-w-4xl mx-auto">
                 <textarea id="rawEditor" class="flex-1 input-bg font-mono text-sm p-4 border rounded resize-none mb-4"></textarea>
-                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-3 rounded font-bold uppercase text-xs">Save Changes</button>
+                <button onclick="saveRawEdit()" class="bg-orange-600 text-white py-3 rounded uppercase text-xs font-bold">Save RAW File</button>
             </div>
         </main>
     </div>
 
     <footer id="status-bar" class="flex items-center justify-between px-6 text-[10px] font-mono text-gray-500">
-        <div class="flex items-center gap-3">
-            <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
-            <span id="statusText">Ready</span>
-        </div>
-        <div class="font-bold tracking-widest opacity-50">v3.6.7</div>
-        <div id="totalCounter" class="font-bold text-blue-500 uppercase">Total: 0</div>
+        <div class="flex items-center gap-3"><div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div><span id="statusText">Ready</span></div>
+        <div class="font-bold tracking-widest opacity-50">v3.6.11</div>
+        <div id="totalCounter" class="font-bold text-blue-500 uppercase">Total Lines: 0</div>
     </footer>
 
     <script>
@@ -114,11 +89,8 @@
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
-            if (token) {
-                dbx = new Dropbox.Dropbox({ accessToken: token });
-                await loadTasks();
-                setInterval(loadTasks, 30000);
-            } else { handleAuth(); }
+            if (token) { dbx = new Dropbox.Dropbox({ accessToken: token }); await loadTasks(); setInterval(loadTasks, 30000); }
+            else { handleAuth(); }
         }
 
         function handleAuth() {
@@ -145,7 +117,7 @@
                 const newTasks = text.split('\n').filter(t => t.trim() !== "");
                 if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
-            } catch (e) { setStatus("Sync Error"); if (e.status === 401) hardLogout(); }
+            } catch (e) { setStatus("Sync Error"); }
             finally { isSyncing = false; }
         }
 
@@ -166,117 +138,128 @@
             
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
 
-            // Apply Filters
             if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
             if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
             
             activeFilters.forEach(f => {
                 if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
+                else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
+                else if (f === 'TOMORROW') displayTasks = displayTasks.filter(t => t.meta.isTomorrow || t.meta.isHeader);
+                else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            // Sorting Logic (Stable)
             if (sortVal === 'prio') {
-                displayTasks.sort((a, b) => {
-                    if (a.meta.isHeader || b.meta.isHeader) return 0;
-                    const pA = a.meta.prio || 'Z';
-                    const pB = b.meta.prio || 'Z';
-                    return pA.localeCompare(pB);
-                });
+                displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             } else if (sortVal === 'due') {
-                displayTasks.sort((a, b) => {
-                    if (a.meta.isHeader || b.meta.isHeader) return 0;
-                    return (a.meta.due || '9999').localeCompare(b.meta.due || '9999');
-                });
+                displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
             }
+
+            document.getElementById('viewCounter').innerText = `Showing ${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('#')).length}`;
 
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) {
                     const level = item.text.match(/^#+/)[0].length;
-                    return `<div class="${level === 1 ? 'h1-style' : level === 2 ? 'h2-style' : 'h3-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
+                    return `<div class="${level === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 }
                 if (editingIndex === item.i) {
-                    return `<div class="p-2 card-bg rounded border border-blue-500 my-1"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
+                    return `<div class="p-2 card-bg border border-blue-500 my-1"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
                 }
-
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
-                
-                // LINK SHRINKING LOGIC
                 let html = item.text
-                    .replace(/link:(https?:\/\/[^\s]+|www\.[^\s]+)/g, (match, url) => {
-                        const cleanUrl = url.startsWith('http') ? url : 'https://' + url;
-                        return `<a href="${cleanUrl}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`;
-                    })
+                    .replace(/link:(https?:\/\/[^\s]+|www\.[^\s]+)/g, (m, u) => `<a href="${u.startsWith('http')?u:'https://'+u}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`)
                     .replace(/^\(([A-Z])\)/, '<span class="text-orange-400 font-bold">($1)</span>')
                     .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
 
-                return `<div class="group flex items-center p-2.5 card-bg rounded border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 hover:brightness-110 transition-all">
+                return `<div class="group flex items-center p-2.5 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 hover:brightness-110">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-3 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-[13px] cursor-text leading-tight" onclick="startEdit(${item.i})">${html}</div>
-                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2 transition-opacity">✕</button>
+                    <button onclick="deleteTask(${item.i})" class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
-            
-            updateSidebarAndPills(displayTasks);
+            updateSidebar(displayTasks);
         }
 
-        function updateSidebarAndPills(filteredTasks) {
-            const updateCategory = (id, regex, color) => {
-                const counts = {};
-                filteredTasks.forEach(t => { 
-                    if(!t.text.startsWith('x ') && !t.meta.isHeader) {
-                        (t.text.match(regex) || []).forEach(tag => counts[tag] = (counts[tag] || 0) + 1);
-                    }
-                });
-                const html = Object.entries(counts).sort().map(([tag, count]) => {
-                    const active = activeFilters.has(tag) ? 'font-bold text-white bg-blue-600/30' : color;
-                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
-                }).join('');
-                document.getElementById(id).innerHTML = html || '<div class="text-[10px] text-gray-700 italic px-1">Empty</div>';
+        function updateSidebar(filtered) {
+            const counts = { OVERDUE: 0, TODAY: 0, TOMORROW: 0, UPCOMING: 0 };
+            const specificDates = {};
+            
+            filtered.forEach(t => {
+                if(!t.text.startsWith('x ') && !t.meta.isHeader) {
+                    if (t.meta.isOverdue) counts.OVERDUE++;
+                    if (t.meta.isToday) counts.TODAY++;
+                    if (t.meta.isTomorrow) counts.TOMORROW++;
+                    if (t.meta.isUpcoming) counts.UPCOMING++;
+                    if (t.meta.due) specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
+                }
+            });
+
+            let dateHtml = '';
+            const addDateItem = (label, key, color) => {
+                if (counts[key] > 0 || activeFilters.has(key)) {
+                    const active = activeFilters.has(key) ? 'bg-blue-600/30 font-bold' : color;
+                    dateHtml += `<div onclick="toggleFilter('${key}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active}"><span>${label}</span><span>${counts[key]}</span></div>`;
+                }
             };
+            addDateItem('Overdue', 'OVERDUE', 'text-red-500');
+            addDateItem('Today', 'TODAY', 'text-yellow-500');
+            addDateItem('Tomorrow', 'TOMORROW', 'text-green-400');
+            addDateItem('Next 7 Days', 'UPCOMING', 'text-blue-400');
+            
+            // Render specific dates found in view
+            Object.keys(specificDates).sort().forEach(d => {
+                const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
+                dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} border-l border-gray-800 ml-2"><span>${d}</span><span class="opacity-50">${specificDates[d]}</span></div>`;
+            });
 
-            updateCategory('priorityList', /\([A-Z]\)/g, 'text-orange-400');
-            updateCategory('projectList', /\+[\w\-]+/g, 'text-blue-400');
-            updateCategory('contextList', /@[\w\-]+/g, 'text-green-400');
+            document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-1 opacity-30">No dates</div>';
 
-            const overdueCount = filteredTasks.filter(t => t.meta.isOverdue).length;
-            const odCont = document.getElementById('pdCont');
-            if (overdueCount > 0 || activeFilters.has('OVERDUE')) {
-                odCont.classList.remove('hidden');
-                const active = activeFilters.has('OVERDUE') ? 'text-white bg-red-600/30 font-bold' : 'text-red-400';
-                document.getElementById('pastDueList').innerHTML = `<div onclick="toggleFilter('OVERDUE')" class="flex justify-between p-1.5 rounded cursor-pointer ${active}"><span>Overdue</span><span>${overdueCount}</span></div>`;
-            } else odCont.classList.add('hidden');
-
-            const openCount = allTasks.filter(t => !t.startsWith('x ') && !t.startsWith('#')).length;
-            document.getElementById('openPill').innerText = `${openCount} OPEN`;
-            document.getElementById('totalCounter').innerText = `Total: ${allTasks.length}`;
+            const updateCat = (id, regex, color) => {
+                const c = {};
+                filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
+                document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
+                    const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
+                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} hover:bg-white/5"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
+                }).join('') || '<div class="px-1 opacity-30">Empty</div>';
+            };
+            updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
+            updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
+            updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
+            document.getElementById('totalCounter').innerText = `Total Lines: ${allTasks.length}`;
         }
 
         function getMeta(t) {
             const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
             const due = d ? d[1] : null;
-            const isOverdue = (due && !t.startsWith('x ')) ? new Date(due) < new Date().setHours(0,0,0,0) : false;
-            return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null, due, isOverdue };
+            if (!due) return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null };
+            
+            const taskDate = new Date(due + 'T00:00:00');
+            const today = new Date(); today.setHours(0,0,0,0);
+            const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+            const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
+            
+            return {
+                isHeader: t.startsWith('#'),
+                prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
+                due,
+                isOverdue: !t.startsWith('x ') && taskDate < today,
+                isToday: !t.startsWith('x ') && taskDate.getTime() === today.getTime(),
+                isTomorrow: !t.startsWith('x ') && taskDate.getTime() === tomorrow.getTime(),
+                isUpcoming: !t.startsWith('x ') && taskDate > today && taskDate <= nextWeek
+            };
         }
 
-        // --- Suggestions & Controls ---
         function handleInput(e) {
-            const val = e.target.value;
-            const cursor = e.target.selectionStart;
-            const lastWord = val.slice(0, cursor).split(/\s/).pop();
+            const val = e.target.value; const cursor = e.target.selectionStart; const lastWord = val.slice(0, cursor).split(/\s/).pop();
             const sugBox = document.getElementById('suggestions');
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
                 const prefix = lastWord[0];
-                const tags = [...new Set(allTasks.flatMap(t => t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))]
-                                .filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
-                if (tags.length) {
-                    sugBox.innerHTML = tags.map((t, i) => `<div class="suggestion-item ${i === suggestionIdx ? 'suggestion-active' : ''}" onclick="applySuggestion('${t}')">${t}</div>`).join('');
-                    sugBox.classList.remove('hidden'); return;
-                }
+                const tags = [...new Set(allTasks.flatMap(t => t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))].filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
+                if (tags.length) { sugBox.innerHTML = tags.map((t, i) => `<div class="suggestion-item ${i===suggestionIdx?'suggestion-active':''}" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
             }
             sugBox.classList.add('hidden'); suggestionIdx = -1;
         }
@@ -287,34 +270,24 @@
                 if (e.key === 'ArrowDown') { e.preventDefault(); suggestionIdx = (suggestionIdx + 1) % s.length; handleInput({target: document.getElementById('newTodo')}); }
                 else if (e.key === 'ArrowUp') { e.preventDefault(); suggestionIdx = (suggestionIdx - 1 + s.length) % s.length; handleInput({target: document.getElementById('newTodo')}); }
                 else if (e.key === 'Enter' && suggestionIdx > -1) { e.preventDefault(); s[suggestionIdx].click(); }
-                else if (e.key === 'Escape') { document.getElementById('suggestions').classList.add('hidden'); }
             } else if (e.key === 'Enter') { addTask(); }
         }
 
         function applySuggestion(tag) {
-            const inp = document.getElementById('newTodo');
-            const words = inp.value.split(' '); words[words.length - 1] = tag;
-            inp.value = words.join(' ') + ' ';
-            document.getElementById('suggestions').classList.add('hidden'); inp.focus();
+            const inp = document.getElementById('newTodo'); const words = inp.value.split(' '); words[words.length - 1] = tag;
+            inp.value = words.join(' ') + ' '; document.getElementById('suggestions').classList.add('hidden'); inp.focus();
         }
 
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
         function finishEdit(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
-        
         function addTask() {
             const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return;
-            let val = inp.value.trim();
-            if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val;
+            let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val;
             allTasks.push(val); inp.value = ""; render(); saveTasks();
         }
-
-        function toggleTask(i) {
-            allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`;
-            render(); saveTasks();
-        }
-
+        function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
         function deleteTask(i) { if(confirm("Delete task?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function hardLogout() { if(confirm("Logout?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
         function toggleTheme() { document.body.classList.toggle('light-mode'); }
@@ -327,7 +300,6 @@
             else { cont.classList.add('hidden'); list.classList.remove('hidden'); }
         }
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
-
         init();
     </script>
 </body>
