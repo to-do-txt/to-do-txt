@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.0.2</title>
+    <title>to-do-txt v4.0.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -105,7 +105,7 @@
                     <button onclick="downloadLocalBackup()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.2</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.3</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -144,7 +144,10 @@
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
                 const newTasks = text.split('\n').filter(t => t.trim() !== "");
-                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { allTasks = newTasks; render(); }
+                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) { 
+                    allTasks = newTasks; 
+                    render(); 
+                }
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) {
                 if (e.status === 404) { await saveTasks(); } 
@@ -241,23 +244,31 @@
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const sortVal = document.getElementById('sortOrder').value;
+            
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
+            
             if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
             if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+            
             activeFilters.forEach(f => {
                 if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
+
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+            
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
+            
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 if (editingIndex === item.i) return `<div class="p-3 card-bg border border-blue-500 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)"></div>`;
+                
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
+                
                 let html = item.text
                     .replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => {
                         const fullUrl = url.startsWith('http') ? url : 'https://' + url;
@@ -266,35 +277,51 @@
                     .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
+                
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
                     <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
-            updateSidebar(displayTasks);
+            
+            // Re-scan metadata for sidebar filters after every render
+            updateSidebar();
         }
 
-        function updateSidebar(filtered) {
+        function updateSidebar() {
+            // Re-calculate counts from the global allTasks to ensure accuracy across files
+            const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
             const counts = { OVERDUE: 0, TODAY: 0 };
-            filtered.forEach(t => {
+            
+            tasksWithMeta.forEach(t => {
                 if(!t.text.startsWith('x ') && !t.meta.isHeader) {
                     if (t.meta.isOverdue) counts.OVERDUE++;
                     if (t.meta.isToday) counts.TODAY++;
                 }
             });
+
             let dH = '';
-            const addD = (l, k, c) => { if (counts[k] > 0 || activeFilters.has(k)) { dH += `<div onclick="toggleFilter('${k}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(k)?'bg-blue-600/30 font-bold':c} font-bold"><span>${l}</span><span class="opacity-60 font-black">${counts[k]}</span></div>`; } };
+            const addD = (l, k, c) => { 
+                if (counts[k] > 0 || activeFilters.has(k)) { 
+                    dH += `<div onclick="toggleFilter('${k}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(k)?'bg-blue-600/30 font-bold':c} font-bold"><span>${l}</span><span class="opacity-60 font-black">${counts[k]}</span></div>`; 
+                } 
+            };
+            
             addD('Overdue', 'OVERDUE', 'text-red-500');
             addD('Today', 'TODAY', 'text-yellow-500');
             document.getElementById('dateList').innerHTML = dH || '<div class="opacity-30 italic">No matches</div>';
+            
             const updateC = (id, regex, color) => {
                 const c = {};
-                filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
+                tasksWithMeta.forEach(t => { 
+                    if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); 
+                });
                 document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
                     return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(tag)?'font-bold bg-blue-600/30':color} hover:bg-white/5"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
                 }).join('') || '<div class="opacity-30 italic">Empty</div>';
             };
+            
             updateC('projectList', /\+[\w\-]+/g, 'text-blue-400');
             updateC('contextList', /@[\w\-]+/g, 'text-green-400');
         }
