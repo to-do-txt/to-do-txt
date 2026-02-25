@@ -3,25 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.26</title>
+    <title>to-do-txt v3.6.27</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         .app-container { display: flex; flex: 1; overflow: hidden; position: relative; }
-        #sidebar { width: 280px; flex-shrink: 0; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: transform 0.2s ease; }
+        
+        #sidebar { 
+            width: 280px; flex-shrink: 0; background: var(--bg-card); border-right: 1px solid var(--border); 
+            display: flex; flex-direction: column; transition: transform 0.2s ease; 
+        }
+
         @media (max-width: 768px) { 
             #sidebar { position: absolute; top: 0; left: 0; bottom: 0; z-index: 1000; transform: translateX(-100%); width: 280px; }
             #sidebar.sidebar-open { transform: translateX(0); }
             .content-overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; }
             .sidebar-open + .content-overlay { display: block; }
         }
+
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         .suggestion-item.active { background-color: #3b82f6; color: white; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
     </style>
 </head>
 <body class="font-sans">
@@ -66,20 +74,26 @@
 
     <div class="app-container">
         <aside id="sidebar">
-            <div class="p-6 flex justify-between items-center md:hidden border-b border-gray-800">
-                <span class="font-black text-blue-500 text-xs">FILTERS</span>
-                <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
+            <div class="p-4 border-b border-gray-800 space-y-3">
+                <div class="flex justify-between items-center md:hidden">
+                    <span class="font-black text-blue-500 text-[10px] tracking-widest">FILTERS</span>
+                    <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="hardLogout()" class="flex-1 bg-red-900/20 text-red-500 text-[10px] font-black py-2 rounded uppercase border border-red-500/20">Logout</button>
+                    <button onclick="resetFilters()" class="flex-[2] bg-blue-900/20 text-blue-500 text-[10px] font-black py-2 rounded uppercase border border-blue-500/20">Clear Filters</button>
+                </div>
             </div>
+            
             <div class="flex-1 overflow-y-auto p-6 space-y-8">
-                <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded uppercase">Reset All</button>
-                <div><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase">Date Filters</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
-                <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
-                <div><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
-                <div class="pb-24"><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
+                <div><h2 class="text-[10px] font-black text-red-500/60 mb-4 uppercase tracking-widest">Date Filters</h2><div id="dateList" class="space-y-1 text-xs"></div></div>
+                <div><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Priority</h2><div id="priorityList" class="space-y-1 text-xs"></div></div>
+                <div><h2 class="text-[10px] font-black text-blue-500/50 mb-4 uppercase tracking-widest">Projects</h2><div id="projectList" class="space-y-1 text-xs"></div></div>
+                <div class="pb-10"><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
             </div>
-            <div class="p-4 border-t border-gray-800 flex justify-between items-center bg-black/10">
-                <span class="text-[9px] font-black uppercase opacity-40">v3.6.26</span>
-                <button onclick="hardLogout()" class="text-[9px] text-red-500 uppercase font-black">Logout</button>
+
+            <div class="p-4 border-t border-gray-800 bg-black/10">
+                <span class="text-[9px] font-black uppercase opacity-40">v3.6.27</span>
             </div>
         </aside>
 
@@ -202,7 +216,8 @@
 
         function handleInput(e) {
             const val = e.target.value;
-            const lastWord = val.split(' ').pop();
+            const words = val.split(' ');
+            const lastWord = words.pop();
             const sugBox = document.getElementById('suggestions');
             
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
@@ -215,7 +230,6 @@
                 });
                 
                 filteredSuggestions = Array.from(allTags).filter(t => t.toLowerCase().includes(query)).sort();
-                
                 if (filteredSuggestions.length > 0) {
                     suggestionIdx = 0;
                     sugBox.innerHTML = filteredSuggestions.map((s, i) => `<div class="suggestion-item p-3 cursor-pointer text-sm border-b border-white/5 ${i === 0 ? 'active' : ''}" onclick="applySuggestion('${s}')">${prefix}${s}</div>`).join('');
@@ -239,31 +253,15 @@
         function handleInputKeyDown(e) {
             const sugBox = document.getElementById('suggestions');
             if (!sugBox.classList.contains('hidden')) {
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    suggestionIdx = (suggestionIdx + 1) % filteredSuggestions.length;
-                    updateSuggestionHighlight();
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    suggestionIdx = (suggestionIdx - 1 + filteredSuggestions.length) % filteredSuggestions.length;
-                    updateSuggestionHighlight();
-                } else if (e.key === 'Enter' || e.key === 'Tab') {
-                    e.preventDefault();
-                    applySuggestion(filteredSuggestions[suggestionIdx]);
-                } else if (e.key === 'Escape') {
-                    sugBox.classList.add('hidden');
-                }
-            } else if (e.key === 'Enter') {
-                addTask();
-            }
+                if (e.key === 'ArrowDown') { e.preventDefault(); suggestionIdx = (suggestionIdx + 1) % filteredSuggestions.length; updateSuggestionHighlight(); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); suggestionIdx = (suggestionIdx - 1 + filteredSuggestions.length) % filteredSuggestions.length; updateSuggestionHighlight(); }
+                else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applySuggestion(filteredSuggestions[suggestionIdx]); }
+            } else if (e.key === 'Enter') { addTask(); }
         }
 
         function updateSuggestionHighlight() {
             const items = document.querySelectorAll('.suggestion-item');
-            items.forEach((item, i) => {
-                if (i === suggestionIdx) item.classList.add('active');
-                else item.classList.remove('active');
-            });
+            items.forEach((item, i) => i === suggestionIdx ? item.classList.add('active') : item.classList.remove('active'));
         }
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
