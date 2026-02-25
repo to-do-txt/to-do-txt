@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.29</title>
+    <title>to-do-txt v3.6.30</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -83,7 +83,7 @@
                 <div class="pb-10"><h2 class="text-[10px] font-black text-green-500/50 mb-4 uppercase tracking-widest">Contexts</h2><div id="contextList" class="space-y-1 text-xs"></div></div>
             </div>
             <div class="p-4 border-t border-gray-800 bg-black/10">
-                <span class="text-[9px] font-black uppercase opacity-40">v3.6.29</span>
+                <span class="text-[9px] font-black uppercase opacity-40">v3.6.30</span>
             </div>
         </aside>
 
@@ -156,12 +156,14 @@
             const due = d ? d[1] : null;
             const taskDate = due ? new Date(due + 'T00:00:00') : null;
             const today = new Date(); today.setHours(0,0,0,0);
+            const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
             return {
                 isHeader: t.startsWith('#'),
                 prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
                 due,
                 isOverdue: !t.startsWith('x ') && taskDate && taskDate < today,
-                isToday: !t.startsWith('x ') && taskDate && taskDate.getTime() === today.getTime()
+                isToday: !t.startsWith('x ') && taskDate && taskDate.getTime() === today.getTime(),
+                isUpcoming: !t.startsWith('x ') && taskDate && taskDate > today && taskDate <= nextWeek
             };
         }
 
@@ -175,6 +177,8 @@
             activeFilters.forEach(f => {
                 if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
+                else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
+                else if (f === 'NODATE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
@@ -200,10 +204,34 @@
         }
 
         function updateSidebar(filtered) {
-            const counts = { OVERDUE: 0, TODAY: 0 };
-            filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) { if (t.meta.isOverdue) counts.OVERDUE++; if (t.meta.isToday) counts.TODAY++; } });
+            const counts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NODATE: 0 };
+            const specificDates = {};
+            filtered.forEach(t => { 
+                if(!t.text.startsWith('x ') && !t.meta.isHeader) { 
+                    if (t.meta.isOverdue) counts.OVERDUE++; 
+                    if (t.meta.isToday) counts.TODAY++; 
+                    if (t.meta.isUpcoming) {
+                        counts.UPCOMING++;
+                        specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
+                    }
+                    if (!t.meta.due) counts.NODATE++; 
+                } 
+            });
+
             const renderDate = (label, key, color) => `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(key) ? 'bg-blue-600/30' : color}"><span>${label}</span><span>${counts[key]}</span></div>`;
-            document.getElementById('dateList').innerHTML = renderDate('Overdue', 'OVERDUE', 'text-red-500') + renderDate('Today', 'TODAY', 'text-yellow-500');
+            
+            let dateHtml = renderDate('No Due Date', 'NODATE', 'text-gray-500') + 
+                           renderDate('Overdue', 'OVERDUE', 'text-red-500') + 
+                           renderDate('Today', 'TODAY', 'text-yellow-500') + 
+                           renderDate('Next 7 Days', 'UPCOMING', 'text-blue-400');
+            
+            // Render specific upcoming dates
+            Object.keys(specificDates).sort().forEach(date => {
+                dateHtml += `<div onclick="toggleFilter('${date}')" class="flex justify-between p-2 pl-6 rounded cursor-pointer text-[10px] opacity-70 ${activeFilters.has(date) ? 'bg-blue-600/30' : 'text-blue-300'}"><span>${date}</span><span>${specificDates[date]}</span></div>`;
+            });
+
+            document.getElementById('dateList').innerHTML = dateHtml;
+
             const updateCat = (id, regex, color) => {
                 const c = {}; filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
                 document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(tag) ? 'bg-blue-600/30' : color}"><span>${tag}</span><span class="opacity-40">${count}</span></div>`).join('') || 'None';
