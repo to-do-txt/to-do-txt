@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.1</title>
+    <title>to-do-txt v3.6.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -19,7 +19,7 @@
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         
         .task-item { border-left-width: 4px; transition: all 0.2s; }
-        .prio-a { border-color: #fb923c; }
+        .prio-a { border-color: #fb923c; } 
         .prio-b { border-color: #facc15; }
         .prio-none { border-color: #3b82f6; }
         
@@ -38,7 +38,7 @@
                 <div class="flex items-center gap-3">
                     <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl">☰</button>
                     <div class="font-bold text-lg text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
-                    <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase">Sync</button>
+                    <button onclick="loadTasks()" id="syncBtn" class="text-[10px] border border-gray-700 px-2 py-0.5 rounded hover:bg-gray-800 uppercase">Sync Now</button>
                 </div>
                 
                 <div class="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
@@ -81,65 +81,82 @@
 
     <div id="status-bar" class="fixed bottom-0 right-0 p-2 px-4 flex items-center gap-3 text-[10px] font-mono text-gray-500">
         <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
-        <span>v3.6.1</span>
-        <span id="statusText" class="border-l border-gray-800 pl-3">Ready</span>
+        <span>v3.6.3</span>
+        <span id="statusText" class="border-l border-gray-800 pl-3">Initializing</span>
     </div>
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null;
+        let dbx, allTasks = [], activeFilters = new Set(), showCompleted = true, showHeaders = true, editingIndex = null, isSyncing = false;
 
         async function init() {
             const token = localStorage.getItem('dbx_token');
             if (token) {
                 dbx = new Dropbox.Dropbox({ accessToken: token });
-                loadTasks();
+                await loadTasks();
+                // START 30 SECOND BACKGROUND POLLING
+                setInterval(loadTasks, 30000);
             } else {
-                const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
-                const code = urlParams.get('access_token');
-                if (code) {
-                    localStorage.setItem('dbx_token', code);
-                    window.location.hash = "";
-                    location.reload();
-                } else {
-                    const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
-                    document.body.innerHTML = `<div class="h-screen flex items-center justify-center"><button onclick="window.location.href='${authUrl}'" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-xl">Connect to Dropbox</button></div>`;
-                }
+                handleAuth();
             }
         }
 
-        function setStatus(text, isSyncing = false) {
+        function handleAuth() {
+            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+            const code = urlParams.get('access_token');
+            if (code) {
+                localStorage.setItem('dbx_token', code);
+                window.location.hash = "";
+                location.reload();
+            } else {
+                const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
+                document.body.innerHTML = `<div class="h-screen flex items-center justify-center"><button onclick="window.location.href='${authUrl}'" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-xl shadow-xl">Connect to Dropbox</button></div>`;
+            }
+        }
+
+        function setStatus(text, active = false) {
             document.getElementById('statusText').innerText = text;
             const ind = document.getElementById('syncIndicator');
-            ind.className = `w-2 h-2 rounded-full ${isSyncing ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
+            ind.className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
         }
 
         async function loadTasks() {
-            if (!dbx) return;
+            if (!dbx || isSyncing) return;
+            isSyncing = true;
             setStatus("Syncing...", true);
             document.getElementById('syncBtn').classList.add('syncing-anim');
             try {
                 const res = await dbx.filesDownload({ path: '/todo.txt' });
                 const text = await res.result.fileBlob.text();
-                allTasks = text.split('\n').filter(t => t.trim() !== "");
-                render();
+                const newTasks = text.split('\n').filter(t => t.trim() !== "");
+                
+                // Only update if content actually changed to avoid UI flickering during edit
+                if (JSON.stringify(newTasks) !== JSON.stringify(allTasks)) {
+                    allTasks = newTasks;
+                    render();
+                }
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
                 console.error(e); 
                 setStatus("Sync Error");
                 if (e.status === 401) hardLogout(); 
             }
-            finally { document.getElementById('syncBtn').classList.remove('syncing-anim'); }
+            finally { 
+                isSyncing = false;
+                document.getElementById('syncBtn').classList.remove('syncing-anim'); 
+            }
         }
 
         async function saveTasks() {
             if (!dbx) return;
+            isSyncing = true; // Block polling while saving
             setStatus("Saving...", true);
             try { 
                 await dbx.filesUpload({ path: '/todo.txt', contents: allTasks.join('\n'), mode: {".tag":"overwrite"} }); 
                 setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`);
             }
             catch (e) { setStatus("Save Error"); console.error(e); }
+            finally { isSyncing = false; }
         }
 
         function render() {
@@ -174,8 +191,13 @@
 
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
-                let html = item.text.replace(/link:(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline" onclick="event.stopPropagation()">link ↗</a>')
-                                    .replace(/^\(([A-Z])\)/, '<span class="text-orange-400 font-bold">($1)</span>');
+                
+                let html = item.text
+                    .replace(/link:(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline" onclick="event.stopPropagation()">link ↗</a>')
+                    .replace(/^\(([A-Z])\)/, '<span class="text-orange-400 font-bold">($1)</span>')
+                    .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
+                    .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
+                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
 
                 return `<div class="group flex items-center p-3 card-bg rounded-r border-l-4 ${pClass} ${isDone ? 'opacity-40 italic' : ''} mb-1 hover:brightness-110">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-5 h-5 mr-4 accent-blue-500 cursor-pointer">
@@ -223,6 +245,7 @@
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
         function finishEdit(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
+        
         function addTask() {
             const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return;
             let val = inp.value.trim();
@@ -234,7 +257,7 @@
             render(); saveTasks();
         }
         function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
-        function hardLogout() { if(confirm("Logout?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
+        function hardLogout() { if(confirm("Logout from Dropbox?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
         function toggleTheme() { document.body.classList.toggle('light-mode'); }
         function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
         function toggleHeaderVisibility() { showHeaders = !showHeaders; render(); }
