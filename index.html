@@ -3,34 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.21</title>
+    <title>to-do-txt v3.6.22</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
         .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
-        
         #sidebar { 
             width: 280px; height: 100%; background: var(--bg-card); border-right: 1px solid var(--border);
             display: flex; flex-direction: column; flex-shrink: 0;
-            transition: transform 0.2s ease, margin-left 0.2s ease;
-            z-index: 100;
+            transition: transform 0.2s ease, margin-left 0.2s ease; z-index: 100;
         }
-
-        /* Desktop States */
         @media (min-width: 768px) {
             #sidebar.hidden-desktop { margin-left: -280px; }
             #sidebar.floating { position: absolute; left: 0; box-shadow: 10px 0 30px rgba(0,0,0,0.5); margin-left: 0; }
         }
-
-        /* Mobile States */
         @media (max-width: 767px) {
             #sidebar { position: fixed; left: -280px; }
             #sidebar.mobile-open { left: 0; box-shadow: 10px 0 50px rgba(0,0,0,0.8); }
         }
-
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
         .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .prio-a { border-left: 4px solid #fb923c; } .prio-b { border-left: 4px solid #facc15; } .prio-none { border-left: 4px solid #3b82f6; }
@@ -54,7 +46,7 @@
 
                 <div class="hidden md:flex items-center gap-5">
                     <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60 mr-2">0/0</span>
-                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-1 text-[10px] font-bold uppercase outline-none">
+                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
@@ -63,6 +55,7 @@
                     <span onclick="toggleHeaderVisibility()" class="header-link text-green-500">Headers</span>
                     <span onclick="toggleCompletedVisibility()" class="header-link text-purple-500">Done</span>
                     <span onclick="toggleRawEdit()" class="header-link text-orange-500">Raw</span>
+                    <span onclick="downloadBackup()" class="header-link text-blue-400">Backup</span>
                     <span onclick="hardLogout()" class="header-link text-gray-500">Logout</span>
                 </div>
 
@@ -98,10 +91,11 @@
                     <button onclick="toggleHeaderVisibility()" class="text-center py-2 rounded bg-white/5 text-[10px] font-bold border border-white/5">Headers</button>
                     <button onclick="toggleCompletedVisibility()" class="text-center py-2 rounded bg-white/5 text-[10px] font-bold border border-white/5">Done</button>
                     <button onclick="toggleRawEdit()" class="text-center py-2 rounded bg-white/5 text-[10px] font-bold border border-white/5">Raw Edit</button>
-                    <button onclick="hardLogout()" class="text-center py-2 rounded bg-red-500/10 text-red-400 text-[10px] font-bold border border-red-500/10">Logout</button>
+                    <button onclick="downloadBackup()" class="text-center py-2 rounded bg-white/5 text-[10px] font-bold border border-white/5">Backup</button>
                 </div>
-                <div class="mt-4">
-                    <select id="sortOrderMobile" onchange="document.getElementById('sortOrder').value = this.value; render();" class="w-full bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-2 text-[10px] font-bold uppercase outline-none">
+                <div class="mt-4 flex gap-2">
+                    <button onclick="hardLogout()" class="flex-1 py-2 rounded bg-red-500/10 text-red-400 text-[10px] font-bold border border-red-500/10">Logout</button>
+                    <select id="sortOrderMobile" onchange="document.getElementById('sortOrder').value = this.value; render();" class="flex-1 bg-[#262626] text-white border border-gray-700 rounded-lg px-2 py-2 text-[10px] font-bold uppercase outline-none">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
@@ -120,7 +114,7 @@
             
             <div class="mt-auto pt-6 border-t border-gray-800 opacity-40">
                 <div id="sidebarOpenTasks" class="text-[9px] font-black uppercase">Tasks: 0</div>
-                <div class="text-[9px] font-black uppercase text-blue-400">v3.6.21</div>
+                <div class="text-[9px] font-black uppercase text-blue-400">v3.6.22</div>
             </div>
         </aside>
         
@@ -148,62 +142,54 @@
             } else { handleAuth(); }
         }
 
+        function downloadBackup() {
+            const now = new Date();
+            const ts = now.toISOString().split('T')[0] + '_' + now.toTimeString().split(' ')[0].replace(/:/g, '-');
+            const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `todo_${ts}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- Sidebar Logic ---
         function applySidebarState() {
             const side = document.getElementById('sidebar');
             const pinBtn = document.getElementById('pinBtn');
             if (window.innerWidth >= 768) {
-                if (isPinned) {
-                    side.classList.remove('hidden-desktop', 'floating');
-                    pinBtn.innerText = '📌';
-                } else {
-                    side.classList.add('hidden-desktop');
-                    side.classList.remove('floating');
-                    pinBtn.innerText = '📍';
-                }
+                if (isPinned) { side.classList.remove('hidden-desktop', 'floating'); pinBtn.innerText = '📌'; }
+                else { side.classList.add('hidden-desktop'); side.classList.remove('floating'); pinBtn.innerText = '📍'; }
             }
         }
-
-        function handlePinToggle() {
-            isPinned = !isPinned;
-            localStorage.setItem('sidebar_pinned', isPinned);
-            applySidebarState();
-        }
-
+        function handlePinToggle() { isPinned = !isPinned; localStorage.setItem('sidebar_pinned', isPinned); applySidebarState(); }
         function toggleSidebar() {
             const side = document.getElementById('sidebar');
-            if (window.innerWidth < 768) {
-                side.classList.toggle('mobile-open');
-            } else {
-                if (!isPinned) {
-                    side.classList.toggle('hidden-desktop');
-                    side.classList.toggle('floating');
-                } else {
-                    handlePinToggle();
-                }
-            }
+            if (window.innerWidth < 768) side.classList.toggle('mobile-open');
+            else { if (!isPinned) { side.classList.toggle('hidden-desktop'); side.classList.toggle('floating'); } else handlePinToggle(); }
         }
-
         function closeSidebar() {
             const side = document.getElementById('sidebar');
             side.classList.remove('mobile-open', 'floating');
             if (window.innerWidth >= 768 && isPinned) handlePinToggle();
         }
-
         function handleMainClick() {
-            if (window.innerWidth < 768) {
-                document.getElementById('sidebar').classList.remove('mobile-open');
-            } else if (document.getElementById('sidebar').classList.contains('floating')) {
+            if (window.innerWidth < 768) document.getElementById('sidebar').classList.remove('mobile-open');
+            else if (document.getElementById('sidebar').classList.contains('floating')) {
                 document.getElementById('sidebar').classList.remove('floating');
                 document.getElementById('sidebar').classList.add('hidden-desktop');
             }
         }
 
+        // --- Dropbox Sync ---
         function setStatus(text, active = false) {
             document.getElementById('statusText').innerText = text;
             const dot = document.querySelector('#syncIndicator div');
             dot.className = `w-2 h-2 rounded-full ${active ? 'bg-blue-500 animate-pulse' : 'bg-green-600'}`;
         }
-
         async function loadTasks() {
             if (!dbx || isSyncing || editingIndex !== null) return;
             isSyncing = true; setStatus("Syncing...", true);
@@ -216,7 +202,6 @@
             } catch (e) { setStatus("Sync Error"); }
             finally { isSyncing = false; }
         }
-
         async function saveTasks() {
             if (!dbx) return;
             isSyncing = true; setStatus("Saving...", true);
@@ -227,6 +212,7 @@
             finally { isSyncing = false; }
         }
 
+        // --- Core Rendering ---
         function render() {
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
@@ -256,7 +242,6 @@
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 if (editingIndex === item.i) return `<div class="p-3 bg-[#1e1e1e] border border-blue-500 my-1 rounded-lg"><input id="edit-${item.i}" type="text" value="${item.text.replace(/"/g, '&quot;')}" class="w-full bg-transparent text-sm outline-none" onblur="finishEdit(${item.i}, this.value)" onkeypress="if(event.key==='Enter') finishEdit(${item.i}, this.value)"></div>`;
-                
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
                 let html = item.text
@@ -265,7 +250,6 @@
                     .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : 'text-yellow-500'} font-bold">$&</span>`);
-
                 return `<div class="group flex items-center p-3 bg-[#1e1e1e] ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500 cursor-pointer">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startEdit(${item.i})">${html}</div>
@@ -275,16 +259,14 @@
             updateSidebar(displayTasks);
         }
 
+        // --- Sidebar Content ---
         function updateSidebar(filtered) {
             const counts = { OVERDUE: 0, TODAY: 0, TOMORROW: 0, UPCOMING: 0, NODATE: 0 };
             const specificDates = {};
             filtered.forEach(t => {
                 if(!t.text.startsWith('x ') && !t.meta.isHeader) {
-                    if (t.meta.isOverdue) counts.OVERDUE++;
-                    if (t.meta.isToday) counts.TODAY++;
-                    if (t.meta.isTomorrow) counts.TOMORROW++;
-                    if (t.meta.isUpcoming) counts.UPCOMING++;
-                    if (!t.meta.due) counts.NODATE++;
+                    if (t.meta.isOverdue) counts.OVERDUE++; if (t.meta.isToday) counts.TODAY++; if (t.meta.isTomorrow) counts.TOMORROW++;
+                    if (t.meta.isUpcoming) counts.UPCOMING++; if (!t.meta.due) counts.NODATE++;
                     if (t.meta.due) specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
                 }
             });
@@ -295,77 +277,49 @@
                     dateHtml += `<div onclick="toggleFilter('${key}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${label}</span><span class="opacity-60">${counts[key]}</span></div>`;
                 }
             };
-            addDateItem('No Due Date', 'NODATE', 'text-gray-500');
-            addDateItem('Overdue', 'OVERDUE', 'text-red-500');
-            addDateItem('Today', 'TODAY', 'text-yellow-500');
-            addDateItem('Tomorrow', 'TOMORROW', 'text-green-400');
+            addDateItem('No Due Date', 'NODATE', 'text-gray-500'); addDateItem('Overdue', 'OVERDUE', 'text-red-500');
+            addDateItem('Today', 'TODAY', 'text-yellow-500'); addDateItem('Tomorrow', 'TOMORROW', 'text-green-400');
             addDateItem('Next 7 Days', 'UPCOMING', 'text-blue-400');
             Object.keys(specificDates).sort().forEach(d => {
                 const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
                 dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-2 rounded cursor-pointer ${active} border-l border-gray-800 ml-2 hover:bg-white/5 transition-colors"><span>${d}</span><span class="opacity-40">${specificDates[d]}</span></div>`;
             });
             document.getElementById('dateList').innerHTML = dateHtml || '<div class="px-2 opacity-30 italic text-[10px]">No matches</div>';
-
             const updateCat = (id, regex, color) => {
-                const c = {};
-                filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
+                const c = {}; filtered.forEach(t => { if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); });
                 document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
                     const active = activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color;
                     return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${active} hover:bg-white/5 transition-colors"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
                 }).join('') || '<div class="px-2 opacity-30 italic text-[10px]">Empty</div>';
             };
-            updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
-            updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
-            updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
-            
-            const openCount = allTasks.filter(t => t.trim() !== "" && !t.startsWith('x ') && !t.startsWith('#')).length;
-            document.getElementById('sidebarOpenTasks').innerText = `Tasks: ${openCount}`;
+            updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400'); updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400'); updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
+            document.getElementById('sidebarOpenTasks').innerText = `Tasks: ${allTasks.filter(t => t.trim() !== "" && !t.startsWith('x ') && !t.startsWith('#')).length}`;
         }
 
+        // --- Helpers ---
         function getMeta(t) {
-            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
-            const due = d ? d[1] : null;
+            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/); const due = d ? d[1] : null;
             if (!due) return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null };
-            const taskDate = new Date(due + 'T00:00:00');
-            const today = new Date(); today.setHours(0,0,0,0);
+            const taskDate = new Date(due + 'T00:00:00'); const today = new Date(); today.setHours(0,0,0,0);
             const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
             const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
-            return {
-                isHeader: t.startsWith('#'),
-                prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null,
-                due,
-                isOverdue: !t.startsWith('x ') && taskDate < today,
-                isToday: !t.startsWith('x ') && taskDate.getTime() === today.getTime(),
-                isTomorrow: !t.startsWith('x ') && taskDate.getTime() === tomorrow.getTime(),
-                isUpcoming: !t.startsWith('x ') && taskDate > today && taskDate <= nextWeek
-            };
+            return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null, due, isOverdue: !t.startsWith('x ') && taskDate < today, isToday: !t.startsWith('x ') && taskDate.getTime() === today.getTime(), isTomorrow: !t.startsWith('x ') && taskDate.getTime() === tomorrow.getTime(), isUpcoming: !t.startsWith('x ') && taskDate > today && taskDate <= nextWeek };
         }
-
         function handleInput(e) {
             const val = e.target.value; const cursor = e.target.selectionStart; const lastWord = val.slice(0, cursor).split(/\s/).pop();
             const sugBox = document.getElementById('suggestions');
             if (lastWord.startsWith('@') || lastWord.startsWith('+')) {
                 const prefix = lastWord[0];
                 const tags = [...new Set(allTasks.flatMap(t => t.match(prefix === '@' ? /@[\w\-]+/g : /\+[\w\-]+/g) || []))].filter(t => t.toLowerCase().includes(lastWord.toLowerCase()));
-                if (tags.length) { sugBox.innerHTML = tags.map((t, i) => `<div class="p-2 cursor-pointer border-b border-[#333] hover:bg-blue-600 text-xs" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
-            }
-            sugBox.classList.add('hidden');
+                if (tags.length) { sugBox.innerHTML = tags.map((t) => `<div class="p-2 cursor-pointer border-b border-[#333] hover:bg-blue-600 text-xs" onclick="applySuggestion('${t}')">${t}</div>`).join(''); sugBox.classList.remove('hidden'); return; }
+            } sugBox.classList.add('hidden');
         }
-
-        function applySuggestion(tag) {
-            const inp = document.getElementById('newTodo'); const words = inp.value.split(' '); words[words.length - 1] = tag;
-            inp.value = words.join(' ') + ' '; document.getElementById('suggestions').classList.add('hidden'); inp.focus();
-        }
-
+        function applySuggestion(tag) { const inp = document.getElementById('newTodo'); const words = inp.value.split(' '); words[words.length - 1] = tag; inp.value = words.join(' ') + ' '; document.getElementById('suggestions').classList.add('hidden'); inp.focus(); }
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         function startEdit(i) { editingIndex = i; render(); setTimeout(() => document.getElementById(`edit-${i}`).focus(), 10); }
         function finishEdit(i, val) { if (val.trim() && val !== allTasks[i]) { allTasks[i] = val.trim(); saveTasks(); } editingIndex = null; render(); }
-        function addTask() {
-            const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return;
-            let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val;
-            allTasks.push(val); inp.value = ""; render(); saveTasks();
-        }
+        function addTask() { const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val; allTasks.push(val); inp.value = ""; render(); saveTasks(); }
         function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
         function deleteTask(i) { if(confirm("Delete task?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function toggleCompletedVisibility() { showCompleted = !showCompleted; render(); }
@@ -378,13 +332,9 @@
         function saveRawEdit() { allTasks = document.getElementById('rawEditor').value.split('\n').filter(t => t.trim() !== ""); saveTasks(); toggleRawEdit(); render(); }
         function hardLogout() { if(confirm("Logout?")) { localStorage.clear(); window.location.replace(window.location.origin + window.location.pathname); } }
         function handleAuth() {
-            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
-            const code = urlParams.get('access_token');
+            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); const code = urlParams.get('access_token');
             if (code) { localStorage.setItem('dbx_token', code); window.location.hash = ""; location.reload(); }
-            else {
-                const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
-                document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="window.location.href='${authUrl}'" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-xl">Connect to Dropbox</button></div>`;
-            }
+            else { const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; document.body.innerHTML = `<div class="h-screen flex items-center justify-center bg-[#121212]"><button onclick="window.location.href='${authUrl}'" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-xl">Connect to Dropbox</button></div>`; }
         }
         init();
     </script>
