@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.9</title>
+    <title>to-do-txt v4.1.9-Fixed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -92,7 +92,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.9</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.9-Fixed</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -125,7 +125,7 @@
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false;
+        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false, editingIndex = null;
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
 
@@ -136,7 +136,7 @@
         }
 
         async function loadTasks() {
-            if (!dbx || isSyncing || editingBulk) return;
+            if (!dbx || isSyncing || editingBulk || editingIndex !== null) return;
             isSyncing = true; setStatus(`Syncing...`, true);
             try {
                 const res = await dbx.filesDownload({ path: currentFile });
@@ -188,17 +188,34 @@
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
+                
+                // INLINE EDIT MODE
+                if (editingIndex === item.i) {
+                    return `<div class="p-2 card-bg border-2 border-blue-500 rounded mb-1 flex flex-col gap-2">
+                        <input type="text" id="inlineEditInput" class="w-full bg-black text-white p-3 rounded outline-none border border-gray-700" value="${item.text}">
+                        <div class="flex gap-2">
+                            <button onclick="saveInlineEdit(${item.i})" class="bg-blue-600 flex-1 py-2 rounded font-bold text-xs">SAVE</button>
+                            <button onclick="cancelInlineEdit()" class="bg-gray-800 px-4 py-2 rounded font-bold text-xs uppercase">Cancel</button>
+                        </div>
+                    </div>`;
+                }
+
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
                 let html = item.text.replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`).replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>').replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>').replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
-                    <div class="flex-1 text-[13px] leading-tight">${html}</div>
+                    <div class="flex-1 text-[13px] leading-tight" onclick="startInlineEdit(${item.i})">${html}</div>
                     <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
             updateSidebar();
         }
+
+        // EDITING FUNCTIONS
+        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }, 50); }
+        function cancelInlineEdit() { editingIndex = null; render(); }
+        function saveInlineEdit(i) { const val = document.getElementById('inlineEditInput').value.trim(); if(val) { allTasks[i] = val; editingIndex = null; render(); saveTasks(); } }
 
         function updateSidebar() {
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
