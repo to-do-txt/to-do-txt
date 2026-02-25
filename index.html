@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v3.6.12</title>
+    <title>to-do-txt v3.6.14</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -17,12 +17,10 @@
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         
-        /* Fixed Sort Visibility */
         select#sortOrder { background-color: #262626; color: white; border: 1px solid #444; }
         .light-mode select#sortOrder { background-color: #fff; color: #000; border: 1px solid #ccc; }
         select#sortOrder option { background-color: #262626; color: white; }
-        .light-mode select#sortOrder option { background-color: #fff; color: #000; }
-
+        
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
         #suggestions { z-index: 200; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto; }
         .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
@@ -55,7 +53,7 @@
                     <button onclick="hardLogout()" class="text-gray-500 hover:text-red-500">Logout</button>
                 </div>
             </div>
-            <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="w-full input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
+            <input type="text" id="searchInput" oninput="render()" placeholder="Search tasks..." class="w-full input-bg border rounded-full px-4 py-1.5 text-xs outline-none focus:border-blue-500">
             <div class="relative flex gap-2">
                 <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" oninput="handleInput(event)" placeholder="Add task (A) @context +project..." class="flex-1 input-bg border rounded px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded font-bold text-sm text-white hover:bg-blue-500 transition-colors">Add</button>
@@ -84,8 +82,8 @@
 
     <footer id="status-bar" class="flex items-center justify-between px-6 py-2 text-[10px] font-mono text-gray-500 card-bg border-t">
         <div class="flex items-center gap-3"><div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div><span id="statusText">Ready</span></div>
-        <div class="font-bold tracking-widest opacity-80 text-blue-400">v3.6.12</div>
-        <div id="totalCounter" class="font-bold text-gray-500 uppercase">Total Lines: 0</div>
+        <div class="font-bold tracking-widest opacity-80 text-blue-400">v3.6.14</div>
+        <div id="totalCounter" class="font-bold text-gray-500 uppercase">Open Tasks: 0</div>
     </footer>
 
     <script>
@@ -153,6 +151,7 @@
                 else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
                 else if (f === 'TOMORROW') displayTasks = displayTasks.filter(t => t.meta.isTomorrow || t.meta.isHeader);
                 else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
+                else if (f === 'NODATE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
@@ -162,7 +161,7 @@
                 displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
             }
 
-            document.getElementById('viewCounter').innerText = `Showing ${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('#')).length}`;
+            document.getElementById('viewCounter').innerText = `Showing ${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
 
             list.innerHTML = displayTasks.map(item => {
                 if (item.meta.isHeader) {
@@ -191,7 +190,7 @@
         }
 
         function updateSidebar(filtered) {
-            const counts = { OVERDUE: 0, TODAY: 0, TOMORROW: 0, UPCOMING: 0 };
+            const counts = { OVERDUE: 0, TODAY: 0, TOMORROW: 0, UPCOMING: 0, NODATE: 0 };
             const specificDates = {};
             filtered.forEach(t => {
                 if(!t.text.startsWith('x ') && !t.meta.isHeader) {
@@ -199,6 +198,7 @@
                     if (t.meta.isToday) counts.TODAY++;
                     if (t.meta.isTomorrow) counts.TOMORROW++;
                     if (t.meta.isUpcoming) counts.UPCOMING++;
+                    if (!t.meta.due) counts.NODATE++;
                     if (t.meta.due) specificDates[t.meta.due] = (specificDates[t.meta.due] || 0) + 1;
                 }
             });
@@ -209,10 +209,12 @@
                     dateHtml += `<div onclick="toggleFilter('${key}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active}"><span>${label}</span><span>${counts[key]}</span></div>`;
                 }
             };
+            addDateItem('No Due Date', 'NODATE', 'text-gray-500');
             addDateItem('Overdue', 'OVERDUE', 'text-red-500');
             addDateItem('Today', 'TODAY', 'text-yellow-500');
             addDateItem('Tomorrow', 'TOMORROW', 'text-green-400');
             addDateItem('Next 7 Days', 'UPCOMING', 'text-blue-400');
+            
             Object.keys(specificDates).sort().forEach(d => {
                 const active = activeFilters.has(d) ? 'bg-blue-600/30 font-bold' : 'text-gray-400';
                 dateHtml += `<div onclick="toggleFilter('${d}')" class="flex justify-between p-1.5 rounded cursor-pointer ${active} border-l border-gray-800 ml-2"><span>${d}</span><span class="opacity-50">${specificDates[d]}</span></div>`;
@@ -230,7 +232,9 @@
             updateCat('priorityList', /\([A-Z]\)/g, 'text-orange-400');
             updateCat('projectList', /\+[\w\-]+/g, 'text-blue-400');
             updateCat('contextList', /@[\w\-]+/g, 'text-green-400');
-            document.getElementById('totalCounter').innerText = `Total Lines: ${allTasks.length}`;
+            
+            const openTasks = allTasks.filter(t => t.trim() !== "" && !t.startsWith('x ') && !t.startsWith('#')).length;
+            document.getElementById('totalCounter').innerText = `Open Tasks: ${openTasks}`;
         }
 
         function getMeta(t) {
