@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.0.6</title>
+    <title>to-do-txt v4.0.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -105,7 +105,7 @@
                     <button onclick="downloadLocalBackup()" class="text-[10px] font-black uppercase py-2 border border-blue-500/40 text-blue-500 rounded transition-all">Backup</button>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.6</span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.0.8</span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -292,45 +292,75 @@
 
         function updateSidebar() {
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
-            const counts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
+            const dateCats = ['OVERDUE', 'TODAY', 'UPCOMING', 'NO_DUE'];
             
+            // Helper to see if a task matches current filters, optionally ignoring a specific set of tags
+            const taskMatches = (task, ignoreFilters = []) => {
+                if (task.text.startsWith('x ') || task.meta.isHeader) return false;
+                return Array.from(activeFilters).every(f => {
+                    if (ignoreFilters.includes(f)) return true;
+                    if (f === 'OVERDUE') return task.meta.isOverdue;
+                    if (f === 'TODAY') return task.meta.isToday;
+                    if (f === 'UPCOMING') return task.meta.isUpcoming;
+                    if (f === 'NO_DUE') return !task.meta.due;
+                    return task.text.includes(f);
+                });
+            };
+
+            // 1. Calculate Date Filter counts (constrained by Projects/Contexts)
+            const dateCounts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
             tasksWithMeta.forEach(t => {
-                if(!t.text.startsWith('x ') && !t.meta.isHeader) {
-                    if (t.meta.isOverdue) counts.OVERDUE++;
-                    else if (t.meta.isToday) counts.TODAY++;
-                    else if (t.meta.isUpcoming) counts.UPCOMING++;
-                    if (!t.meta.due) counts.NO_DUE++;
+                if (taskMatches(t, dateCats)) { // Ignore existing date filters for this count
+                    if (t.meta.isOverdue) dateCounts.OVERDUE++;
+                    else if (t.meta.isToday) dateCounts.TODAY++;
+                    else if (t.meta.isUpcoming) dateCounts.UPCOMING++;
+                    if (!t.meta.due) dateCounts.NO_DUE++;
                 }
             });
 
-            // Permanent Date Display
-            const dateCats = [
+            const dateLabels = [
                 { label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' },
                 { label: 'Today', key: 'TODAY', color: 'text-yellow-500' },
                 { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' },
                 { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }
             ];
 
-            document.getElementById('dateList').innerHTML = dateCats.map(c => {
+            document.getElementById('dateList').innerHTML = dateLabels.map(c => {
                 const isActive = activeFilters.has(c.key);
                 return `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${isActive ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5">
                     <span>${c.label}</span>
-                    <span class="opacity-60 font-black">${counts[c.key]}</span>
+                    <span class="opacity-60 font-black">${dateCounts[c.key]}</span>
                 </div>`;
             }).join('');
             
-            const updateC = (id, regex, color) => {
-                const c = {};
+            // 2. Calculate Projects/Contexts (constrained by everything else)
+            const updateTags = (id, regex, color) => {
+                const tagMap = {};
                 tasksWithMeta.forEach(t => { 
-                    if(!t.text.startsWith('x ') && !t.meta.isHeader) (t.text.match(regex)||[]).forEach(tag => c[tag] = (c[tag]||0)+1); 
+                    // To count tags accurately, we check if the task matches ALL OTHER filters
+                    const tagsInTask = t.text.match(regex) || [];
+                    tagsInTask.forEach(tag => {
+                        if (taskMatches(t, [tag])) { // Ignore the tag itself when checking constraints
+                            tagMap[tag] = (tagMap[tag] || 0) + 1;
+                        }
+                    });
                 });
-                document.getElementById(id).innerHTML = Object.entries(c).sort().map(([tag, count]) => {
-                    return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(tag)?'font-bold bg-blue-600/30':color} hover:bg-white/5"><span>${tag}</span><span class="opacity-40">${count}</span></div>`;
-                }).join('') || '<div class="opacity-30 italic">Empty</div>';
+
+                // Display logic: only show tags with count > 0 OR if they are currently active
+                const html = Object.entries(tagMap)
+                    .sort()
+                    .map(([tag, count]) => {
+                        const isActive = activeFilters.has(tag);
+                        return `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${isActive ? 'font-bold bg-blue-600/30' : color} hover:bg-white/5">
+                            <span>${tag}</span><span class="opacity-40">${count}</span>
+                        </div>`;
+                    }).join('');
+                
+                document.getElementById(id).innerHTML = html || '<div class="opacity-30 italic">No matches</div>';
             };
             
-            updateC('projectList', /\+[\w\-]+/g, 'text-blue-400');
-            updateC('contextList', /@[\w\-]+/g, 'text-green-400');
+            updateTags('projectList', /\+[\w\-]+/g, 'text-blue-400');
+            updateTags('contextList', /@[\w\-]+/g, 'text-green-400');
         }
 
         function getMeta(t) {
