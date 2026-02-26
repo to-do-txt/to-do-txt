@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.16</title>
+    <title>to-do-txt v4.1.17</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -30,8 +30,8 @@
         details[open] summary { color: #60a5fa; margin-bottom: 0.5rem; }
         .btn-toggle { font-size: 10px; font-weight: 900; padding: 4px 10px; border-radius: 4px; border: 1px solid #333; text-transform: uppercase; transition: all 0.2s; }
         .btn-toggle.active { background: #3b82f6; border-color: #3b82f6; color: white; }
-        #suggestionBox { position: absolute; bottom: 100%; left: 0; width: 200px; max-height: 200px; overflow-y: auto; background: #1e1e1e; border: 1px solid #333; border-radius: 8px; z-index: 200; display: none; margin-bottom: 5px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        .suggestion-item { padding: 8px 12px; font-size: 12px; cursor: pointer; font-weight: bold; border-bottom: 1px solid #222; }
+        #suggestionBox { position: absolute; bottom: 100%; left: 0; width: 220px; max-height: 200px; overflow-y: auto; background: #1e1e1e; border: 1px solid #3b82f6; border-radius: 8px; z-index: 200; display: none; margin-bottom: 5px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .suggestion-item { padding: 10px 14px; font-size: 12px; cursor: pointer; font-weight: bold; border-bottom: 1px solid #222; color: #e5e7eb; }
         .suggestion-item:hover { background: #3b82f6; color: white; }
     </style>
 </head>
@@ -96,7 +96,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.16</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.17</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -205,7 +205,9 @@
             const input = document.getElementById('newTodo');
             const val = input.value;
             const cursor = input.selectionStart;
-            const start = val.slice(0, cursor).lastIndexOf(tag[0]);
+            const parts = val.slice(0, cursor).split(/\s/);
+            const lastWord = parts[parts.length - 1];
+            const start = cursor - lastWord.length;
             input.value = val.slice(0, start) + tag + ' ' + val.slice(cursor);
             input.focus();
             document.getElementById('suggestionBox').style.display = 'none';
@@ -256,5 +258,4 @@
             updateSidebar();
         }
 
-        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }, 50); }
-        function cancelInlineEdi
+        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditI
