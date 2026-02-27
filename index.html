@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.15</title>
+    <title>to-do-txt v4.1.24</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -17,7 +17,7 @@
         }
         .file-active { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.1); font-weight: 900; color: #3b82f6; }
         .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
-        .h2-style { font-size: 0.9rem; font-800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
+        .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
         .card-bg { background-color: var(--bg-card); border-color: var(--border); }
         .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
         .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
@@ -92,7 +92,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.15</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.24</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -145,19 +145,13 @@
             try {
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
-                allTasks = text.split('\n').filter(t => t.trim() !== ""); render();
+                // FIX: Stopped filtering empty lines during load
+                allTasks = text.split('\n'); 
+                render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
-                if (e.status === 401) {
-                    hardLogout();
-                } 
-                else if (e.status === 0 || !navigator.onLine) {
-                    setStatus("Offline", false);
-                    document.getElementById('syncIndicator').className = "w-2 h-2 rounded-full bg-red-500";
-                }
-                else if (e.status === 404 || (e.error && JSON.stringify(e.error).includes("not_found"))) {
-                    allTasks = []; render(); await saveTasks();
-                } else { setStatus("Sync Error"); }
+                if (e.status === 401) hardLogout();
+                else setStatus("Sync Error");
             } finally { isSyncing = false; }
         }
 
@@ -165,14 +159,13 @@
             if (!dbx || !navigator.onLine) return;
             isSyncing = true; setStatus("Saving...", true);
             try { 
-                const contents = allTasks.length > 0 ? allTasks.join('\n') : " ";
+                const contents = allTasks.join('\n');
                 await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
                 setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
             } catch (e) { 
                 if (e.status === 401) hardLogout();
                 else setStatus("Save Error"); 
-            }
-            finally { isSyncing = false; }
+            } finally { isSyncing = false; }
         }
 
         function render() {
@@ -196,11 +189,15 @@
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
-            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader || !a.text.trim() || !b.text.trim()) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
+            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader || !a.text.trim() || !b.text.trim()) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
 
-            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#')).length}`;
+            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim() !== "").length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim() !== "").length}`;
+            
             list.innerHTML = displayTasks.map(item => {
+                // FIX: Handle empty lines by rendering nothing in the UI (but keeping them in the data)
+                if (item.text.trim() === "") return "";
+
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 
                 if (editingIndex === item.i) {
@@ -215,17 +212,24 @@
 
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
-                let html = item.text.replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`).replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>').replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>').replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
+                
+                // Color RegEx
+                let html = item.text
+                    .replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`)
+                    .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
+                    .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
+                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
+
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startInlineEdit(${item.i})">${html}</div>
-                    <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
+                    <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2 font-bold">✕</button>
                 </div>`;
             }).join('');
             updateSidebar();
         }
 
-        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }, 50); }
+        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); if(el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 50); }
         function cancelInlineEdit() { editingIndex = null; render(); }
         function saveInlineEdit(i) { const val = document.getElementById('inlineEditInput').value.trim(); if(val) { allTasks[i] = val; editingIndex = null; render(); saveTasks(); } }
 
@@ -233,7 +237,7 @@
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
             const dateCats = ['OVERDUE', 'TODAY', 'UPCOMING', 'NO_DUE'];
             const taskMatches = (task, ignoreFilters = []) => {
-                if (task.text.startsWith('x ') || task.meta.isHeader) return false;
+                if (task.text.startsWith('x ') || task.meta.isHeader || task.text.trim() === "") return false;
                 return Array.from(activeFilters).every(f => {
                     if (ignoreFilters.includes(f)) return true;
                     if (f === 'OVERDUE') return task.meta.isOverdue;
@@ -267,6 +271,7 @@
         }
 
         function getMeta(t) {
+            if (!t) return { isHeader: false };
             const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
             const today = new Date(); today.setHours(0,0,0,0);
             const taskD = d ? new Date(d[1] + 'T00:00:00') : null;
@@ -279,7 +284,6 @@
         function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
         function addTask() { const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val; allTasks.push(val); inp.value = ""; render(); saveTasks(); }
         function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
-        
         function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
         function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
         
@@ -290,14 +294,18 @@
             if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n');
             else render();
         }
-        function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n').filter(t => t.trim() !== ""); toggleBulkEdit(); saveTasks(); }
+        function saveBulk() { 
+            // FIX: Removed the filter that was vacuuming empty lines
+            allTasks = document.getElementById('bulkInput').value.split('\n'); 
+            toggleBulkEdit(); 
+            saveTasks(); 
+        }
         
         function exportFile() {
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0];
             const timeStr = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
             const fileName = currentFile.replace('/', '').replace('.txt', '');
-            
             const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -307,18 +315,7 @@
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
-        
-        function handleAuth() { 
-            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?')); 
-            const token = urlParams.get('access_token'); 
-            if (token) { 
-                localStorage.setItem('dbx_token', token); 
-                window.location.hash = ""; 
-                location.reload(); 
-            } else { 
-                window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; 
-            } 
-        }
+        function handleAuth() { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; }
 
         function updateFileUI() { 
             const list = document.getElementById('fileList'); 
@@ -327,7 +324,6 @@
             list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted hover:bg-white/5'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
         }
         async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; updateFileUI(); await loadTasks(); if(document.getElementById('sidebar').classList.contains('sidebar-open')) toggleSidebar(); }
-        
         function showFileManager() { document.getElementById('fileManagerOverlay').classList.remove('hidden'); renderBulkList(); }
         function hideFileManager() { document.getElementById('fileManagerOverlay').classList.add('hidden'); }
         function renderBulkList() {
