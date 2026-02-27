@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.24</title>
+    <title>to-do-txt v4.1.25</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -92,7 +92,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.24</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.25</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -145,8 +145,7 @@
             try {
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
-                // FIX: Stopped filtering empty lines during load
-                allTasks = text.split('\n'); 
+                allTasks = text.split('\n'); // Preserves empty lines
                 render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
@@ -189,15 +188,14 @@
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader || !a.text.trim() || !b.text.trim()) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
-            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader || !a.text.trim() || !b.text.trim()) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+            // RESTORED: Precise v4.1.15 sorting logic
+            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
+            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
 
-            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim() !== "").length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim() !== "").length}`;
+            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim()).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim()).length}`;
             
             list.innerHTML = displayTasks.map(item => {
-                // FIX: Handle empty lines by rendering nothing in the UI (but keeping them in the data)
-                if (item.text.trim() === "") return "";
-
+                if (!item.text.trim()) return ""; // Keep data, hide in UI
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 
                 if (editingIndex === item.i) {
@@ -213,7 +211,7 @@
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
                 
-                // Color RegEx
+                // RESTORED: Full Color/Link Regex
                 let html = item.text
                     .replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`)
                     .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
@@ -223,13 +221,13 @@
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
                     <div class="flex-1 text-[13px] leading-tight" onclick="startInlineEdit(${item.i})">${html}</div>
-                    <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2 font-bold">✕</button>
+                    <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
             updateSidebar();
         }
 
-        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); if(el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 50); }
+        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); if(el){el.focus(); el.setSelectionRange(el.value.length, el.value.length);} }, 50); }
         function cancelInlineEdit() { editingIndex = null; render(); }
         function saveInlineEdit(i) { const val = document.getElementById('inlineEditInput').value.trim(); if(val) { allTasks[i] = val; editingIndex = null; render(); saveTasks(); } }
 
@@ -237,7 +235,7 @@
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
             const dateCats = ['OVERDUE', 'TODAY', 'UPCOMING', 'NO_DUE'];
             const taskMatches = (task, ignoreFilters = []) => {
-                if (task.text.startsWith('x ') || task.meta.isHeader || task.text.trim() === "") return false;
+                if (task.text.startsWith('x ') || task.meta.isHeader || !task.text.trim()) return false;
                 return Array.from(activeFilters).every(f => {
                     if (ignoreFilters.includes(f)) return true;
                     if (f === 'OVERDUE') return task.meta.isOverdue;
@@ -295,21 +293,15 @@
             else render();
         }
         function saveBulk() { 
-            // FIX: Removed the filter that was vacuuming empty lines
             allTasks = document.getElementById('bulkInput').value.split('\n'); 
-            toggleBulkEdit(); 
-            saveTasks(); 
+            toggleBulkEdit(); saveTasks(); 
         }
         
         function exportFile() {
-            const now = new Date();
-            const dateStr = now.toISOString().split('T')[0];
-            const timeStr = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-            const fileName = currentFile.replace('/', '').replace('.txt', '');
             const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `${fileName}_${dateStr}_${timeStr}.txt`;
+            a.href = url; a.download = `todo_backup_${new Date().toISOString().split('T')[0]}.txt`;
             a.click(); URL.revokeObjectURL(url);
         }
 
@@ -330,10 +322,10 @@
             const list = document.getElementById('bulkFileList');
             list.innerHTML = knownFiles.map(f => `<div class="flex items-center justify-between p-4 card-bg border rounded-lg"><span class="font-black text-sm uppercase">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</span>${f !== '/todo.txt' ? `<button onclick="removeFileBulk('${f}')" class="text-red-500 text-xs font-bold uppercase tracking-widest border border-red-500/30 px-3 py-1 rounded">Remove</button>` : '<span class="text-[9px] opacity-30 uppercase font-black">Default Base</span>'}</div>`).join('');
         }
-        function removeFileBulk(path) { if (confirm(`Remove "${path}" from your sidebar?`)) { knownFiles = knownFiles.filter(f => f !== path); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); if (currentFile === path) switchFile('/todo.txt'); renderBulkList(); updateFileUI(); } }
+        function removeFileBulk(path) { if (confirm(`Remove "${path}"?`)) { knownFiles = knownFiles.filter(f => f !== path); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); if (currentFile === path) switchFile('/todo.txt'); renderBulkList(); updateFileUI(); } }
         function addProjectFromBulk() {
             const input = document.getElementById('bulkFileName');
-            const rawName = input.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').substring(0, 20);
+            const rawName = input.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '');
             if (!rawName) return;
             const fullPath = `/todo_${rawName}.txt`;
             if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); renderBulkList(); updateFileUI(); }
