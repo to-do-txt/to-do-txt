@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.25</title>
+    <title>to-do-txt v4.1.26</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -92,7 +92,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.25</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.26</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -125,18 +125,30 @@
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
+        // HARDCODED URI for consistency
+        const REDIRECT_URI = 'https://to-do-txt.github.io/to-do-txt/';
+
         let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false, editingIndex = null;
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
 
         async function init() {
-            const token = localStorage.getItem('dbx_token');
+            // FIX: Check for token in URL hash first (for new logins)
+            const urlParams = new URLSearchParams(window.location.hash.substring(1));
+            const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
+
             if (token) { 
+                localStorage.setItem('dbx_token', token);
+                // Clean URL hash without reloading page
+                if (window.location.hash) history.replaceState(null, null, window.location.pathname);
+                
                 dbx = new Dropbox.Dropbox({ accessToken: token }); 
                 await loadTasks(); 
                 updateFileUI(); 
                 setInterval(loadTasks, 30000); 
-            } else { handleAuth(); }
+            } else { 
+                handleAuth(); 
+            }
         }
 
         async function loadTasks() {
@@ -145,7 +157,7 @@
             try {
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
-                allTasks = text.split('\n'); // Preserves empty lines
+                allTasks = text.split('\n');
                 render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
@@ -188,14 +200,13 @@
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            // RESTORED: Precise v4.1.15 sorting logic
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
 
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim()).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim()).length}`;
             
             list.innerHTML = displayTasks.map(item => {
-                if (!item.text.trim()) return ""; // Keep data, hide in UI
+                if (!item.text.trim()) return ""; 
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 
                 if (editingIndex === item.i) {
@@ -211,7 +222,6 @@
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
                 
-                // RESTORED: Full Color/Link Regex
                 let html = item.text
                     .replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`)
                     .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
@@ -284,18 +294,8 @@
         function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
         function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
         function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
-        
-        function toggleBulkEdit() {
-            editingBulk = !editingBulk;
-            document.getElementById('todoList').classList.toggle('hidden', editingBulk);
-            document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk);
-            if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n');
-            else render();
-        }
-        function saveBulk() { 
-            allTasks = document.getElementById('bulkInput').value.split('\n'); 
-            toggleBulkEdit(); saveTasks(); 
-        }
+        function toggleBulkEdit() { editingBulk = !editingBulk; document.getElementById('todoList').classList.toggle('hidden', editingBulk); document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk); if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n'); else render(); }
+        function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n'); toggleBulkEdit(); saveTasks(); }
         
         function exportFile() {
             const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
@@ -307,7 +307,11 @@
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
-        function handleAuth() { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`; }
+        
+        // FIX: Ensure this exact URL is in your Dropbox Console
+        function handleAuth() { 
+            window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`; 
+        }
 
         function updateFileUI() { 
             const list = document.getElementById('fileList'); 
