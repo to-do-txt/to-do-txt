@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.29</title>
+    <title>to-do-txt v4.1.30</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -66,6 +66,7 @@
             <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
                 <button onclick="toggleCompleted()" id="toggleCompBtn" class="btn-toggle active">Completed</button>
                 <button onclick="toggleHeaders()" id="toggleHeadBtn" class="btn-toggle active">Headers</button>
+                <button onclick="toggleAddToTop()" id="toggleTopBtn" class="btn-toggle">Add to Top</button>
                 <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
                 <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
                 <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Backup</button>
@@ -94,7 +95,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.29</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.30</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -130,12 +131,16 @@
         const REDIRECT_URI = 'https://to-do-txt.github.io/to-do-txt/';
 
         let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false, editingIndex = null;
+        let addToTop = localStorage.getItem('add_to_top') === 'true';
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
 
         async function init() {
             const urlParams = new URLSearchParams(window.location.hash.substring(1));
             const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
+
+            // Apply loaded visual state to UI button
+            if (addToTop) document.getElementById('toggleTopBtn').classList.add('active');
 
             if (token) { 
                 localStorage.setItem('dbx_token', token);
@@ -307,10 +312,36 @@
         function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
         function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
         function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
-        function addTask() { const inp = document.getElementById('newTodo'); if (!inp.value.trim()) return; let val = inp.value.trim(); if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) val = new Date().toISOString().split('T')[0] + " " + val; allTasks.push(val); inp.value = ""; render(); saveTasks(); }
+        
+        function addTask() { 
+            const inp = document.getElementById('newTodo'); 
+            if (!inp.value.trim()) return; 
+            let val = inp.value.trim(); 
+            if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) {
+                val = new Date().toISOString().split('T')[0] + " " + val; 
+            }
+            
+            if (addToTop) {
+                allTasks.unshift(val);
+            } else {
+                allTasks.push(val);
+            }
+            
+            inp.value = ""; 
+            render(); 
+            saveTasks(); 
+        }
+
         function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
         function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
         function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
+        
+        function toggleAddToTop() {
+            addToTop = !addToTop;
+            localStorage.setItem('add_to_top', addToTop);
+            document.getElementById('toggleTopBtn').classList.toggle('active', addToTop);
+        }
+
         function toggleBulkEdit() { editingBulk = !editingBulk; document.getElementById('todoList').classList.toggle('hidden', editingBulk); document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk); if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n'); else render(); }
         function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n'); toggleBulkEdit(); saveTasks(); }
         
