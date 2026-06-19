@@ -87,6 +87,7 @@
                 <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
                 <section><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Dashboard</h2><div id="dateList" class="space-y-1 text-xs"></div></section>
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Specific Dates <span class="toggle-icon"></span></summary><div id="specificDateList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Created Dates <span class="toggle-icon"></span></summary><div id="createdDateList" class="space-y-1 text-xs pt-2"></div></details>
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Priorities <span class="toggle-icon"></span></summary><div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div></details>
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Projects <span class="toggle-icon"></span></summary><div id="projectList" class="space-y-1 text-xs pt-2"></div></details>
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
@@ -125,7 +126,6 @@
 
     <script>
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
-        // HARDCODED URI for consistency
         const REDIRECT_URI = 'https://to-do-txt.github.io/to-do-txt/';
 
         let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false, editingIndex = null;
@@ -133,13 +133,11 @@
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
 
         async function init() {
-            // FIX: Check for token in URL hash first (for new logins)
             const urlParams = new URLSearchParams(window.location.hash.substring(1));
             const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
 
             if (token) { 
                 localStorage.setItem('dbx_token', token);
-                // Clean URL hash without reloading page
                 if (window.location.hash) history.replaceState(null, null, window.location.pathname);
                 
                 dbx = new Dropbox.Dropbox({ accessToken: token }); 
@@ -196,6 +194,7 @@
                 else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
                 else if (f === 'NO_DUE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
                 else if (f.startsWith('DATE:')) displayTasks = displayTasks.filter(t => t.meta.due === f.split(':')[1] || t.meta.isHeader);
+                else if (f.startsWith('CREATE:')) displayTasks = displayTasks.filter(t => t.meta.created === f.split(':')[1] || t.meta.isHeader);
                 else if (f.startsWith('PRIO:')) displayTasks = displayTasks.filter(t => t.meta.prio === f.split(':')[1] || t.meta.isHeader);
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
@@ -253,6 +252,7 @@
                     if (f === 'UPCOMING') return task.meta.isUpcoming;
                     if (f === 'NO_DUE') return !task.meta.due;
                     if (f.startsWith('DATE:')) return task.meta.due === f.split(':')[1];
+                    if (f.startsWith('CREATE:')) return task.meta.created === f.split(':')[1];
                     if (f.startsWith('PRIO:')) return task.meta.prio === f.split(':')[1];
                     return task.text.includes(f);
                 });
@@ -264,6 +264,10 @@
             const specificDateMap = {};
             tasksWithMeta.forEach(t => { if (t.meta.due) { const key = `DATE:${t.meta.due}`; if (taskMatches(t, [key])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
             document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => `<div onclick="toggleFilter('DATE:${d}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has('DATE:'+d) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`).join('');
+
+            const createdDateMap = {};
+            tasksWithMeta.forEach(t => { if (t.meta.created) { const key = `CREATE:${t.meta.created}`; if (taskMatches(t, [key])) createdDateMap[t.meta.created] = (createdDateMap[t.meta.created] || 0) + 1; } });
+            document.getElementById('createdDateList').innerHTML = Object.entries(createdDateMap).sort((a, b) => b[0].localeCompare(a[0])).map(([d, count]) => `<div onclick="toggleFilter('CREATE:${d}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has('CREATE:'+d) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`).join('') || '<div class="opacity-30 italic text-[10px] p-2">None</div>';
 
             const updateTags = (id, type, regex, color) => {
                 const tagMap = {};
@@ -283,7 +287,18 @@
             const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
             const today = new Date(); today.setHours(0,0,0,0);
             const taskD = d ? new Date(d[1] + 'T00:00:00') : null;
-            return { isHeader: t.startsWith('#'), prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null, due: d ? d[1] : null, isOverdue: !t.startsWith('x ') && taskD && taskD < today, isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(), isUpcoming: !t.startsWith('x ') && taskD && taskD > today };
+            const createMatch = t.match(/^(?:\([A-Z]\)\s+)?(\d{4}-\d{2}-\d{2})/);
+            const createdDate = createMatch ? createMatch[1] : null;
+
+            return { 
+                isHeader: t.startsWith('#'), 
+                prio: (t.match(/^\(([A-Z])\)/) || [])[1] || null, 
+                due: d ? d[1] : null, 
+                isOverdue: !t.startsWith('x ') && taskD && taskD < today, 
+                isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(), 
+                isUpcoming: !t.startsWith('x ') && taskD && taskD > today,
+                created: createdDate
+            };
         }
 
         function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
@@ -308,7 +323,6 @@
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
         
-        // FIX: Ensure this exact URL is in your Dropbox Console
         function handleAuth() { 
             window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`; 
         }
