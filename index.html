@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.32</title>
+    <title>to-do-txt v4.1.33</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -70,6 +70,7 @@
                 <button onclick="toggleCompleted()" id="toggleCompBtn" class="btn-toggle active">Completed</button>
                 <button onclick="toggleHeaders()" id="toggleHeadBtn" class="btn-toggle active">Headers</button>
                 <button onclick="toggleAddToTop()" id="toggleTopBtn" class="btn-toggle">Add to Top</button>
+                <button onclick="sweepCompletedToBottom()" class="btn-toggle hover:bg-white/5 border border-blue-500/30 text-blue-400">Sweep Done</button>
                 <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
                 <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
                 <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Backup</button>
@@ -98,7 +99,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.32</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.33</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -174,19 +175,22 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n');
                 
-                existingProjects.clear();
-                existingContexts.clear();
-                allTasks.forEach(t => {
-                    (t.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
-                    (t.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
-                });
-
+                rebuildTagCaches();
                 render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
                 if (e.status === 401) hardLogout();
                 else setStatus("Sync Error");
             } finally { isSyncing = false; }
+        }
+
+        function rebuildTagCaches() {
+            existingProjects.clear();
+            existingContexts.clear();
+            allTasks.forEach(t => {
+                (t.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+                (t.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+            });
         }
 
         async function saveTasks() {
@@ -356,7 +360,6 @@
             saveTasks(); 
         }
 
-        // Shared dynamic input processing rule for all creation contexts
         function handleInputAutocomplete(inputEl, targetDropdownId) {
             const val = inputEl.value;
             const selectionEnd = inputEl.selectionEnd;
@@ -446,6 +449,30 @@
                     }
                 }
             }
+        }
+
+        // Partitioning engine that gathers history rows and drops them cleanly at the end
+        function sweepCompletedToBottom() {
+            if (allTasks.length === 0) return;
+            
+            const activeLines = [];
+            const completedLines = [];
+            
+            allTasks.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return; // Clean trailing empties
+                if (trimmed.startsWith('x ')) {
+                    completedLines.push(line);
+                } else {
+                    activeLines.push(line);
+                }
+            });
+            
+            // Merge files structurally back into a clean linear format
+            allTasks = [...activeLines, ...completedLines];
+            
+            render();
+            saveTasks();
         }
 
         function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
