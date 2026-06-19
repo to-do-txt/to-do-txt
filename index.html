@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.30</title>
+    <title>to-do-txt v4.1.31</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -58,9 +58,12 @@
             </div>
             <div class="flex flex-col md:flex-row gap-3">
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                <div class="relative flex-[2] flex gap-2">
-                    <input type="text" id="newTodo" autocomplete="off" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                    <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
+                <div class="relative flex-[2] flex flex-col">
+                    <div class="flex gap-2">
+                        <input type="text" id="newTodo" autocomplete="off" oninput="handleInputAutocomplete(this)" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                        <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
+                    </div>
+                    <div id="autocompleteDropdown" class="hidden absolute left-0 right-0 top-full mt-1 card-bg border rounded-lg shadow-xl max-h-48 overflow-y-auto z-[200] p-1 space-y-0.5"></div>
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
@@ -95,7 +98,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.30</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.31</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -134,12 +137,14 @@
         let addToTop = localStorage.getItem('add_to_top') === 'true';
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
+        
+        // Caches existing active file tags for autocomplete queries
+        let existingProjects = new Set(), existingContexts = new Set();
 
         async function init() {
             const urlParams = new URLSearchParams(window.location.hash.substring(1));
             const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
 
-            // Apply loaded visual state to UI button
             if (addToTop) document.getElementById('toggleTopBtn').classList.add('active');
 
             if (token) { 
@@ -153,6 +158,11 @@
             } else { 
                 handleAuth(); 
             }
+            
+            // Close autocomplete when clicking outside the area
+            document.addEventListener('click', (e) => {
+                if (e.target.id !== 'newTodo') hideAutocomplete();
+            });
         }
 
         async function loadTasks() {
@@ -162,6 +172,15 @@
                 const res = await dbx.filesDownload({ path: currentFile });
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n');
+                
+                // Build autocomplete caches
+                existingProjects.clear();
+                existingContexts.clear();
+                allTasks.forEach(t => {
+                    (t.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+                    (t.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+                });
+
                 render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
@@ -327,12 +346,94 @@
                 allTasks.push(val);
             }
             
+            // Add any newly typed tags immediately into the local helper list
+            (val.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+            (val.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+
             inp.value = ""; 
+            hideAutocomplete();
             render(); 
             saveTasks(); 
         }
 
-        function handleInputKeyDown(e) { if (e.key === 'Enter') addTask(); }
+        // Live input evaluation for tag autocompletion
+        function handleInputAutocomplete(inputEl) {
+            const val = inputEl.value;
+            const selectionEnd = inputEl.selectionEnd;
+            
+            // Isolate the word currently containing the typing caret
+            const textBeforeCaret = val.substring(0, selectionEnd);
+            const currentWordMatch = textBeforeCaret.match(/([\+@][\w\-]*)$/);
+            
+            if (!currentWordMatch) {
+                hideAutocomplete();
+                return;
+            }
+            
+            const currentTag = currentWordMatch[1];
+            const prefix = currentTag[0]; // '+' or '@'
+            const searchStr = currentTag.toLowerCase();
+            
+            let sourcePool = prefix === '+' ? Array.from(existingProjects) : Array.from(existingContexts);
+            let matches = sourcePool.filter(tag => tag.toLowerCase().startsWith(searchStr) && tag.toLowerCase() !== searchStr);
+            
+            if (matches.length === 0) {
+                hideAutocomplete();
+                return;
+            }
+            
+            const dropdown = document.getElementById('autocompleteDropdown');
+            dropdown.innerHTML = matches.map((match, idx) => {
+                const colorClass = prefix === '+' ? 'text-blue-400' : 'text-green-400';
+                return `<div onclick="selectAutocomplete('${match}')" class="p-2 text-xs font-mono font-bold cursor-pointer hover:bg-white/5 rounded ${colorClass} transition-all ${idx === 0 ? 'bg-white/5' : ''}" data-value="${match}">
+                    ${match} <span class="text-gray-600 text-[10px] float-right uppercase font-sans tracking-widest pt-0.5">Tab ⇥</span>
+                </div>`;
+            }).join('');
+            
+            dropdown.classList.remove('hidden');
+        }
+
+        function selectAutocomplete(chosenTag) {
+            const inputEl = document.getElementById('newTodo');
+            const val = inputEl.value;
+            const selectionEnd = inputEl.selectionEnd;
+            
+            const textBeforeCaret = val.substring(0, selectionEnd);
+            const textAfterCaret = val.substring(selectionEnd);
+            
+            // Swap out the partial word with the fully formed tag string
+            const updatedBeforeCaret = textBeforeCaret.replace(/([\+@][\w\-]*)$/, chosenTag + ' ');
+            
+            inputEl.value = updatedBeforeCaret + textAfterCaret;
+            inputEl.focus();
+            
+            // Set caret position right after the newly added space space
+            const newCaretPos = updatedBeforeCaret.length;
+            inputEl.setSelectionRange(newCaretPos, newCaretPos);
+            
+            hideAutocomplete();
+        }
+
+        function hideAutocomplete() {
+            document.getElementById('autocompleteDropdown').classList.add('hidden');
+        }
+
+        function handleInputKeyDown(e) { 
+            if (e.key === 'Enter') {
+                addTask(); 
+            } else if (e.key === 'Tab') {
+                const dropdown = document.getElementById('autocompleteDropdown');
+                if (!dropdown.classList.contains('hidden')) {
+                    e.preventDefault();
+                    // Choose the first match on the list
+                    const firstMatch = dropdown.querySelector('[data-value]');
+                    if (firstMatch) {
+                        selectAutocomplete(firstMatch.getAttribute('data-value'));
+                    }
+                }
+            }
+        }
+
         function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
         function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
         
