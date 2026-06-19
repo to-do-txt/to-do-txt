@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.31</title>
+    <title>to-do-txt v4.1.32</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -60,7 +60,7 @@
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex flex-col">
                     <div class="flex gap-2">
-                        <input type="text" id="newTodo" autocomplete="off" oninput="handleInputAutocomplete(this)" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                        <input type="text" id="newTodo" autocomplete="off" oninput="handleInputAutocomplete(this, 'autocompleteDropdown')" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                         <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
                     </div>
                     <div id="autocompleteDropdown" class="hidden absolute left-0 right-0 top-full mt-1 card-bg border rounded-lg shadow-xl max-h-48 overflow-y-auto z-[200] p-1 space-y-0.5"></div>
@@ -98,7 +98,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.31</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.32</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -138,7 +138,6 @@
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
         
-        // Caches existing active file tags for autocomplete queries
         let existingProjects = new Set(), existingContexts = new Set();
 
         async function init() {
@@ -159,9 +158,11 @@
                 handleAuth(); 
             }
             
-            // Close autocomplete when clicking outside the area
             document.addEventListener('click', (e) => {
-                if (e.target.id !== 'newTodo') hideAutocomplete();
+                if (e.target.id !== 'newTodo' && e.target.id !== 'inlineEditInput') {
+                    hideAutocomplete('autocompleteDropdown');
+                    hideAutocomplete('inlineAutocompleteDropdown');
+                }
             });
         }
 
@@ -173,7 +174,6 @@
                 const text = await res.result.fileBlob.text();
                 allTasks = text.split('\n');
                 
-                // Build autocomplete caches
                 existingProjects.clear();
                 existingContexts.clear();
                 allTasks.forEach(t => {
@@ -235,8 +235,9 @@
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 
                 if (editingIndex === item.i) {
-                    return `<div class="p-2 card-bg border-2 border-blue-500 rounded mb-1 flex flex-col gap-2">
-                        <input type="text" id="inlineEditInput" class="w-full bg-black text-white p-3 rounded outline-none border border-gray-700" value="${item.text}">
+                    return `<div class="p-2 card-bg border-2 border-blue-500 rounded mb-1 flex flex-col gap-2 relative">
+                        <input type="text" id="inlineEditInput" autocomplete="off" oninput="handleInputAutocomplete(this, 'inlineAutocompleteDropdown')" onkeydown="handleInlineEditKeyDown(event, ${item.i})" class="w-full bg-black text-white p-3 rounded outline-none border border-gray-700" value="${item.text}">
+                        <div id="inlineAutocompleteDropdown" class="hidden absolute left-2 right-2 top-[55px] card-bg border rounded-lg shadow-xl max-h-40 overflow-y-auto z-[200] p-1 space-y-0.5"></div>
                         <div class="flex gap-2">
                             <button onclick="saveInlineEdit(${item.i})" class="bg-blue-600 flex-1 py-2 rounded font-bold text-xs">SAVE</button>
                             <button onclick="cancelInlineEdit()" class="bg-gray-800 px-4 py-2 rounded font-bold text-xs uppercase">Cancel</button>
@@ -346,46 +347,44 @@
                 allTasks.push(val);
             }
             
-            // Add any newly typed tags immediately into the local helper list
             (val.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
             (val.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
 
             inp.value = ""; 
-            hideAutocomplete();
+            hideAutocomplete('autocompleteDropdown');
             render(); 
             saveTasks(); 
         }
 
-        // Live input evaluation for tag autocompletion
-        function handleInputAutocomplete(inputEl) {
+        // Shared dynamic input processing rule for all creation contexts
+        function handleInputAutocomplete(inputEl, targetDropdownId) {
             const val = inputEl.value;
             const selectionEnd = inputEl.selectionEnd;
             
-            // Isolate the word currently containing the typing caret
             const textBeforeCaret = val.substring(0, selectionEnd);
             const currentWordMatch = textBeforeCaret.match(/([\+@][\w\-]*)$/);
             
             if (!currentWordMatch) {
-                hideAutocomplete();
+                hideAutocomplete(targetDropdownId);
                 return;
             }
             
             const currentTag = currentWordMatch[1];
-            const prefix = currentTag[0]; // '+' or '@'
+            const prefix = currentTag[0]; 
             const searchStr = currentTag.toLowerCase();
             
             let sourcePool = prefix === '+' ? Array.from(existingProjects) : Array.from(existingContexts);
             let matches = sourcePool.filter(tag => tag.toLowerCase().startsWith(searchStr) && tag.toLowerCase() !== searchStr);
             
             if (matches.length === 0) {
-                hideAutocomplete();
+                hideAutocomplete(targetDropdownId);
                 return;
             }
             
-            const dropdown = document.getElementById('autocompleteDropdown');
+            const dropdown = document.getElementById(targetDropdownId);
             dropdown.innerHTML = matches.map((match, idx) => {
                 const colorClass = prefix === '+' ? 'text-blue-400' : 'text-green-400';
-                return `<div onclick="selectAutocomplete('${match}')" class="p-2 text-xs font-mono font-bold cursor-pointer hover:bg-white/5 rounded ${colorClass} transition-all ${idx === 0 ? 'bg-white/5' : ''}" data-value="${match}">
+                return `<div onclick="selectAutocomplete('${match}', '${inputEl.id}', '${targetDropdownId}')" class="p-2 text-xs font-mono font-bold cursor-pointer hover:bg-white/5 rounded ${colorClass} transition-all ${idx === 0 ? 'bg-white/5' : ''}" data-value="${match}">
                     ${match} <span class="text-gray-600 text-[10px] float-right uppercase font-sans tracking-widest pt-0.5">Tab ⇥</span>
                 </div>`;
             }).join('');
@@ -393,29 +392,28 @@
             dropdown.classList.remove('hidden');
         }
 
-        function selectAutocomplete(chosenTag) {
-            const inputEl = document.getElementById('newTodo');
+        function selectAutocomplete(chosenTag, inputElementId, dropdownElementId) {
+            const inputEl = document.getElementById(inputElementId);
             const val = inputEl.value;
             const selectionEnd = inputEl.selectionEnd;
             
             const textBeforeCaret = val.substring(0, selectionEnd);
             const textAfterCaret = val.substring(selectionEnd);
             
-            // Swap out the partial word with the fully formed tag string
             const updatedBeforeCaret = textBeforeCaret.replace(/([\+@][\w\-]*)$/, chosenTag + ' ');
             
             inputEl.value = updatedBeforeCaret + textAfterCaret;
             inputEl.focus();
             
-            // Set caret position right after the newly added space space
             const newCaretPos = updatedBeforeCaret.length;
             inputEl.setSelectionRange(newCaretPos, newCaretPos);
             
-            hideAutocomplete();
+            hideAutocomplete(dropdownElementId);
         }
 
-        function hideAutocomplete() {
-            document.getElementById('autocompleteDropdown').classList.add('hidden');
+        function hideAutocomplete(dropdownElementId) {
+            const dropdown = document.getElementById(dropdownElementId);
+            if (dropdown) dropdown.classList.add('hidden');
         }
 
         function handleInputKeyDown(e) { 
@@ -425,10 +423,26 @@
                 const dropdown = document.getElementById('autocompleteDropdown');
                 if (!dropdown.classList.contains('hidden')) {
                     e.preventDefault();
-                    // Choose the first match on the list
                     const firstMatch = dropdown.querySelector('[data-value]');
                     if (firstMatch) {
-                        selectAutocomplete(firstMatch.getAttribute('data-value'));
+                        selectAutocomplete(firstMatch.getAttribute('data-value'), 'newTodo', 'autocompleteDropdown');
+                    }
+                }
+            }
+        }
+
+        function handleInlineEditKeyDown(e, taskIndex) {
+            if (e.key === 'Enter') {
+                saveInlineEdit(taskIndex);
+            } else if (e.key === 'Escape') {
+                cancelInlineEdit();
+            } else if (e.key === 'Tab') {
+                const dropdown = document.getElementById('inlineAutocompleteDropdown');
+                if (!dropdown.classList.contains('hidden')) {
+                    e.preventDefault();
+                    const firstMatch = dropdown.querySelector('[data-value]');
+                    if (firstMatch) {
+                        selectAutocomplete(firstMatch.getAttribute('data-value'), 'inlineEditInput', 'inlineAutocompleteDropdown');
                     }
                 }
             }
