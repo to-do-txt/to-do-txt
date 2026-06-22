@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.37</title>
+    <title>to-do-txt v4.1.38</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -100,7 +100,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.37</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.38</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -188,8 +188,11 @@
                 render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
             } catch (e) { 
-                if (e.status === 401) hardLogout();
-                else setStatus("Sync Error");
+                if (e.status === 401 || e.status === 400) {
+                    handleAuthRecovery();
+                } else {
+                    setStatus("Sync Error");
+                }
             } finally { isSyncing = false; }
         }
 
@@ -201,9 +204,18 @@
                 await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
                 setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
             } catch (e) { 
-                if (e.status === 401) hardLogout();
-                else setStatus("Save Error"); 
+                if (e.status === 401 || e.status === 400) {
+                    handleAuthRecovery();
+                } else {
+                    setStatus("Save Error"); 
+                }
             } finally { isSyncing = false; }
+        }
+
+        function handleAuthRecovery() {
+            setStatus("Session Expired - Reauthenticating...");
+            localStorage.removeItem('dbx_token');
+            setTimeout(() => { handleAuth(); }, 800);
         }
 
         function calculateAgeString(createdDateStr) {
@@ -224,7 +236,6 @@
             return `${Math.floor(diffDays / 365)}y`;
         }
 
-        // Natural Language Parsing Engine for dates
         function parseSmartDates(textStr) {
             if (!textStr) return textStr;
             const match = textStr.match(/due:([A-Za-z0-9_]+)/);
@@ -245,7 +256,7 @@
                 const targetDayIndex = daysOfWeek.indexOf(rawValue);
                 const currentDayIndex = targetDate.getDay();
                 let daysToAdd = targetDayIndex - currentDayIndex;
-                if (daysToAdd <= 0) daysToAdd += 7; // Target next week instance if weekday is today/past
+                if (daysToAdd <= 0) daysToAdd += 7; 
                 targetDate.setDate(targetDate.getDate() + daysToAdd);
                 valid = true;
             } else if (rawValue.match(/^(\d+)d$/)) {
@@ -349,7 +360,7 @@
         function saveInlineEdit(i) { 
             let val = document.getElementById('inlineEditInput').value.trim(); 
             if(val) { 
-                val = parseSmartDates(val); // Intercept and map natural dates
+                val = parseSmartDates(val); 
                 allTasks[i] = val; 
                 editingIndex = null; 
                 render(); 
@@ -433,9 +444,7 @@
             if (!inp.value.trim()) return; 
             let val = inp.value.trim(); 
             
-            // Apply Smart Date Parsing evaluation before appending creation dates
             val = parseSmartDates(val);
-            
             if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) {
                 val = new Date().toISOString().split('T')[0] + " " + val; 
             }
@@ -514,7 +523,6 @@
             if (dropdown) dropdown.classList.add('hidden');
         }
 
-        // Intercept keys for creator window
         function handleInputKeyDown(e) { 
             if (e.key === 'Enter') {
                 addTask(); 
@@ -530,7 +538,6 @@
             }
         }
 
-        // Intercept keys for inline editor
         function handleInlineEditKeyDown(e, taskIndex) {
             if (e.key === 'Enter') {
                 saveInlineEdit(taskIndex);
