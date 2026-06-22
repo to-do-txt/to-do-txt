@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.35</title>
+    <title>to-do-txt v4.1.36</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -100,7 +100,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.35</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.36</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -137,7 +137,7 @@
 
         let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showHeaders = true, editingBulk = false, editingIndex = null;
         let addToTop = localStorage.getItem('add_to_top') === 'true';
-        let completedFilterMode = localStorage.getItem('completed_filter_mode') || 'all'; // Mode values: 'all', 'active', 'completed'
+        let completedFilterMode = localStorage.getItem('completed_filter_mode') || 'all'; 
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
         
@@ -206,6 +206,25 @@
             } finally { isSyncing = false; }
         }
 
+        // Calculates a clean relative string representing task lifespan
+        function calculateAgeString(createdDateStr) {
+            if (!createdDateStr) return '';
+            const created = new Date(createdDateStr + 'T00:00:00');
+            if (isNaN(created.getTime())) return '';
+            const now = new Date();
+            now.setHours(0,0,0,0);
+            
+            const diffTime = now.getTime() - created.getTime();
+            if (diffTime < 0) return '0d'; // Future-proof safety
+            
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 7) return `${diffDays}d`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
+            if (diffDays < 365) return `${Math.floor(diffDays / 30)}m`;
+            return `${Math.floor(diffDays / 365)}y`;
+        }
+
         function render() {
             if (editingBulk) return;
             const list = document.getElementById('todoList');
@@ -213,7 +232,6 @@
             const sortVal = document.getElementById('sortOrder').value;
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
             
-            // Completed Filter Logic evaluation
             if (completedFilterMode === 'active') {
                 displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
             } else if (completedFilterMode === 'completed') {
@@ -265,9 +283,21 @@
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
 
+                // Append an age badge dynamically if a creation signature matches and task is active
+                let ageBadgeHtml = '';
+                if (!isDone && item.meta.created) {
+                    const ageToken = calculateAgeString(item.meta.created);
+                    if (ageToken) {
+                        ageBadgeHtml = `<span class="ml-2 text-[10px] font-bold text-gray-600 select-none bg-white/5 border border-white/5 px-1.5 py-0.5 rounded">${ageToken}</span>`;
+                    }
+                }
+
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
-                    <div class="flex-1 text-[13px] leading-tight" onclick="startInlineEdit(${item.i})">${html}</div>
+                    <div class="flex-1 text-[13px] leading-tight flex items-center justify-between" onclick="startInlineEdit(${item.i})">
+                        <span>${html}</span>
+                        ${ageBadgeHtml}
+                    </div>
                     <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
                 </div>`;
             }).join('');
@@ -329,7 +359,6 @@
             const createMatch = t.match(/^(?:\([A-Z]\)\s+)?(\d{4}-\d{2}-\d{2})/);
             const createdDate = createMatch ? createMatch[1] : null;
 
-            // Extract completion date from standard formats like 'x YYYY-MM-DD ...'
             const compMatch = t.match(/^x\s+(\d{4}-\d{2}-\d{2})/);
             const completedDate = compMatch ? compMatch[1] : null;
 
@@ -485,7 +514,6 @@
             saveTasks();
         }
 
-        // 3-way toggle mechanic cycling through visibility states
         function cycleCompletedFilter() {
             if (completedFilterMode === 'all') {
                 completedFilterMode = 'active';
