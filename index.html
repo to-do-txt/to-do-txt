@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.36</title>
+    <title>to-do-txt v4.1.37</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -61,7 +61,7 @@
                 <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-[2] flex flex-col">
                     <div class="flex gap-2">
-                        <input type="text" id="newTodo" autocomplete="off" oninput="handleInputAutocomplete(this, 'autocompleteDropdown')" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done?" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                        <input type="text" id="newTodo" autocomplete="off" oninput="handleInputAutocomplete(this, 'autocompleteDropdown')" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done? (e.g. due:tomorrow)" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
                         <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
                     </div>
                     <div id="autocompleteDropdown" class="hidden absolute left-0 right-0 top-full mt-1 card-bg border rounded-lg shadow-xl max-h-48 overflow-y-auto z-[200] p-1 space-y-0.5"></div>
@@ -100,7 +100,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.36</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.37</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -206,7 +206,6 @@
             } finally { isSyncing = false; }
         }
 
-        // Calculates a clean relative string representing task lifespan
         function calculateAgeString(createdDateStr) {
             if (!createdDateStr) return '';
             const created = new Date(createdDateStr + 'T00:00:00');
@@ -215,7 +214,7 @@
             now.setHours(0,0,0,0);
             
             const diffTime = now.getTime() - created.getTime();
-            if (diffTime < 0) return '0d'; // Future-proof safety
+            if (diffTime < 0) return '0d'; 
             
             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
             
@@ -223,6 +222,47 @@
             if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
             if (diffDays < 365) return `${Math.floor(diffDays / 30)}m`;
             return `${Math.floor(diffDays / 365)}y`;
+        }
+
+        // Natural Language Parsing Engine for dates
+        function parseSmartDates(textStr) {
+            if (!textStr) return textStr;
+            const match = textStr.match(/due:([A-Za-z0-9_]+)/);
+            if (!match) return textStr;
+            
+            const rawValue = match[1].toLowerCase();
+            const targetDate = new Date();
+            targetDate.setHours(0,0,0,0);
+            let valid = false;
+            
+            if (rawValue === 'today') {
+                valid = true;
+            } else if (rawValue === 'tomorrow') {
+                targetDate.setDate(targetDate.getDate() + 1);
+                valid = true;
+            } else if (['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].includes(rawValue)) {
+                const daysOfWeek = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+                const targetDayIndex = daysOfWeek.indexOf(rawValue);
+                const currentDayIndex = targetDate.getDay();
+                let daysToAdd = targetDayIndex - currentDayIndex;
+                if (daysToAdd <= 0) daysToAdd += 7; // Target next week instance if weekday is today/past
+                targetDate.setDate(targetDate.getDate() + daysToAdd);
+                valid = true;
+            } else if (rawValue.match(/^(\d+)d$/)) {
+                const days = parseInt(rawValue.match(/^(\d+)d$/)[1]);
+                targetDate.setDate(targetDate.getDate() + days);
+                valid = true;
+            } else if (rawValue.match(/^(\d+)w$/)) {
+                const weeks = parseInt(rawValue.match(/^(\d+)w$/)[1]);
+                targetDate.setDate(targetDate.getDate() + (weeks * 7));
+                valid = true;
+            }
+            
+            if (valid) {
+                const dateISOString = targetDate.toISOString().split('T')[0];
+                return textStr.replace(/due:[A-Za-z0-9_]+/, `due:${dateISOString}`);
+            }
+            return textStr;
         }
 
         function render() {
@@ -283,7 +323,6 @@
                     .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
                     .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
 
-                // Append an age badge dynamically if a creation signature matches and task is active
                 let ageBadgeHtml = '';
                 if (!isDone && item.meta.created) {
                     const ageToken = calculateAgeString(item.meta.created);
@@ -306,7 +345,17 @@
 
         function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); if(el){el.focus(); el.setSelectionRange(el.value.length, el.value.length);} }, 50); }
         function cancelInlineEdit() { editingIndex = null; render(); }
-        function saveInlineEdit(i) { const val = document.getElementById('inlineEditInput').value.trim(); if(val) { allTasks[i] = val; editingIndex = null; render(); saveTasks(); } }
+        
+        function saveInlineEdit(i) { 
+            let val = document.getElementById('inlineEditInput').value.trim(); 
+            if(val) { 
+                val = parseSmartDates(val); // Intercept and map natural dates
+                allTasks[i] = val; 
+                editingIndex = null; 
+                render(); 
+                saveTasks(); 
+            } 
+        }
 
         function updateSidebar() {
             const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
@@ -383,6 +432,10 @@
             const inp = document.getElementById('newTodo'); 
             if (!inp.value.trim()) return; 
             let val = inp.value.trim(); 
+            
+            // Apply Smart Date Parsing evaluation before appending creation dates
+            val = parseSmartDates(val);
+            
             if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) {
                 val = new Date().toISOString().split('T')[0] + " " + val; 
             }
@@ -461,6 +514,7 @@
             if (dropdown) dropdown.classList.add('hidden');
         }
 
+        // Intercept keys for creator window
         function handleInputKeyDown(e) { 
             if (e.key === 'Enter') {
                 addTask(); 
@@ -476,6 +530,7 @@
             }
         }
 
+        // Intercept keys for inline editor
         function handleInlineEditKeyDown(e, taskIndex) {
             if (e.key === 'Enter') {
                 saveInlineEdit(taskIndex);
