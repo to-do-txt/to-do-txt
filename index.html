@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.34</title>
+    <title>to-do-txt v4.1.35</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -53,6 +53,7 @@
                         <option value="prio">Priority</option>
                         <option value="due">Due Date</option>
                         <option value="created">Created Date</option>
+                        <option value="completed">Completed Date</option>
                     </select>
                 </div>
             </div>
@@ -67,7 +68,7 @@
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
-                <button onclick="toggleCompleted()" id="toggleCompBtn" class="btn-toggle active">Completed</button>
+                <button onclick="cycleCompletedFilter()" id="toggleCompBtn" class="btn-toggle active">Completed: Show All</button>
                 <button onclick="toggleHeaders()" id="toggleHeadBtn" class="btn-toggle active">Headers</button>
                 <button onclick="toggleAddToTop()" id="toggleTopBtn" class="btn-toggle">Add to Top</button>
                 <button onclick="sweepCompletedToBottom()" class="btn-toggle hover:bg-white/5 border border-blue-500/30 text-blue-400">Sweep Done</button>
@@ -99,7 +100,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.34</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.35</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -134,8 +135,9 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = 'https://to-do-txt.github.io/to-do-txt/';
 
-        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showCompleted = true, showHeaders = true, editingBulk = false, editingIndex = null;
+        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showHeaders = true, editingBulk = false, editingIndex = null;
         let addToTop = localStorage.getItem('add_to_top') === 'true';
+        let completedFilterMode = localStorage.getItem('completed_filter_mode') || 'all'; // Mode values: 'all', 'active', 'completed'
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
         
@@ -146,6 +148,7 @@
             const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
 
             if (addToTop) document.getElementById('toggleTopBtn').classList.add('active');
+            updateCompletedFilterButtonUI();
 
             if (token) { 
                 localStorage.setItem('dbx_token', token);
@@ -190,6 +193,19 @@
             } finally { isSyncing = false; }
         }
 
+        async function saveTasks() {
+            if (!dbx || !navigator.onLine) return;
+            isSyncing = true; setStatus("Saving...", true);
+            try { 
+                const contents = allTasks.join('\n');
+                await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
+                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
+            } catch (e) { 
+                if (e.status === 401) hardLogout();
+                else setStatus("Save Error"); 
+            } finally { isSyncing = false; }
+        }
+
         function render() {
             if (editingBulk) return;
             const list = document.getElementById('todoList');
@@ -197,7 +213,13 @@
             const sortVal = document.getElementById('sortOrder').value;
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
             
-            if (!showCompleted) displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            // Completed Filter Logic evaluation
+            if (completedFilterMode === 'active') {
+                displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            } else if (completedFilterMode === 'completed') {
+                displayTasks = displayTasks.filter(t => t.text.startsWith('x ') || t.meta.isHeader);
+            }
+            
             if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
             if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
             
@@ -215,6 +237,7 @@
             if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
             else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
             else if (sortVal === 'created') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (b.meta.created || '0000').localeCompare(a.meta.created || '0000'));
+            else if (sortVal === 'completed') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (b.meta.completed || '0000').localeCompare(a.meta.completed || '0000'));
 
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim()).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim()).length}`;
             
@@ -302,8 +325,13 @@
             const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
             const today = new Date(); today.setHours(0,0,0,0);
             const taskD = d ? new Date(d[1] + 'T00:00:00') : null;
+            
             const createMatch = t.match(/^(?:\([A-Z]\)\s+)?(\d{4}-\d{2}-\d{2})/);
             const createdDate = createMatch ? createMatch[1] : null;
+
+            // Extract completion date from standard formats like 'x YYYY-MM-DD ...'
+            const compMatch = t.match(/^x\s+(\d{4}-\d{2}-\d{2})/);
+            const completedDate = compMatch ? compMatch[1] : null;
 
             return { 
                 isHeader: t.startsWith('#'), 
@@ -312,7 +340,8 @@
                 isOverdue: !t.startsWith('x ') && taskD && taskD < today, 
                 isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(), 
                 isUpcoming: !t.startsWith('x ') && taskD && taskD > today,
-                created: createdDate
+                created: createdDate,
+                completed: completedDate
             };
         }
 
@@ -435,7 +464,6 @@
             }
         }
 
-        // Fixed partitioning strategy: Empty spacing lines are preserved in active contexts
         function sweepCompletedToBottom() {
             if (allTasks.length === 0) return;
             
@@ -444,7 +472,6 @@
             
             allTasks.forEach(line => {
                 const trimmed = line.trim();
-                // If it is completely blank or does not start with x, keep it where it is
                 if (!trimmed || !trimmed.startsWith('x ')) {
                     activeAndBlankLines.push(line);
                 } else {
@@ -458,7 +485,34 @@
             saveTasks();
         }
 
-        function toggleCompleted() { showCompleted = !showCompleted; document.getElementById('toggleCompBtn').classList.toggle('active'); render(); }
+        // 3-way toggle mechanic cycling through visibility states
+        function cycleCompletedFilter() {
+            if (completedFilterMode === 'all') {
+                completedFilterMode = 'active';
+            } else if (completedFilterMode === 'active') {
+                completedFilterMode = 'completed';
+            } else {
+                completedFilterMode = 'all';
+            }
+            localStorage.setItem('completed_filter_mode', completedFilterMode);
+            updateCompletedFilterButtonUI();
+            render();
+        }
+
+        function updateCompletedFilterButtonUI() {
+            const btn = document.getElementById('toggleCompBtn');
+            if (completedFilterMode === 'all') {
+                btn.innerText = "Completed: Show All";
+                btn.className = "btn-toggle active";
+            } else if (completedFilterMode === 'active') {
+                btn.innerText = "Completed: Hidden";
+                btn.className = "btn-toggle";
+            } else if (completedFilterMode === 'completed') {
+                btn.innerText = "Completed: Only";
+                btn.className = "btn-toggle active bg-green-600 border-green-600 hover:bg-green-700";
+            }
+        }
+
         function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
         
         function toggleAddToTop() {
@@ -481,7 +535,6 @@
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
         function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
         
-        // FIX: Exact Dropbox console Redirect URI validation alignment
         function handleAuth() { 
             window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`; 
         }
