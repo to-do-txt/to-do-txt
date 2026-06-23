@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.38</title>
+    <title>to-do-txt v4.1.39</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -100,7 +100,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.38</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.39</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -328,11 +328,46 @@
                 const isDone = item.text.startsWith('x ');
                 const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
                 
-                let html = item.text
-                    .replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`)
-                    .replace(/\+[\w\-]+/g, '<span class="text-blue-400 font-bold">$&</span>')
-                    .replace(/@[\w\-]+/g, '<span class="text-green-400 font-bold">$&</span>')
-                    .replace(/due:(\d{4}-\d{2}-\d{2})/, `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold">$&</span>`);
+                // Visual cleaning engine: strip metadata out of the main description string view
+                let cleanDescription = item.text;
+                
+                // Remove completion markers and status signatures
+                if (isDone) {
+                    cleanDescription = cleanDescription.replace(/^x\s+(\d{4}-\d{2}-\d{2})\s+/, '').replace(/^x\s+/, '');
+                }
+                // Strip priority tokens (e.g. (A))
+                cleanDescription = cleanDescription.replace(/^\([A-Z]\)\s+/, '');
+                // Strip creation date tokens if present
+                if (item.meta.created) {
+                    cleanDescription = cleanDescription.replace(new RegExp('^' + item.meta.created + '\\s+'), '');
+                }
+                
+                // Harvest explicit project/context tag sub-elements for the sub-line view
+                let projectBadges = (cleanDescription.match(/\+[\w\-]+/g) || []).map(p => `<span class="text-blue-400 font-bold mr-2">${p}</span>`).join('');
+                let contextBadges = (cleanDescription.match(/@[\w\-]+/g) || []).map(c => `<span class="text-green-400 font-bold mr-2">${c}</span>`).join('');
+                
+                // Clean tags and due date syntax items out of the main string display layout
+                cleanDescription = cleanDescription.replace(/\+[\w\-]+/g, '').replace(/@[\w\-]+/g, '').replace(/due:[^\s]+/g, '');
+                cleanDescription = cleanDescription.trim();
+
+                // Format link components inside cleaned descriptions
+                let finalDescriptionHtml = cleanDescription.replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`);
+
+                // Generate a predictable, clean sub-line sequence loop underneath the description line
+                let metadataRowHtml = '';
+                let hasSublineContent = item.meta.created || projectBadges || contextBadges || item.meta.due;
+                
+                if (hasSublineContent) {
+                    let createdSpan = item.meta.created ? `<span class="text-gray-500 text-[11px] font-medium mr-3">📅 ${item.meta.created}</span>` : '';
+                    let dueSpan = item.meta.due ? `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold text-[11px]">due:${item.meta.due}</span>` : '';
+                    
+                    metadataRowHtml = `<div class="flex flex-wrap items-center mt-1 opacity-80 gap-y-0.5 text-[11px]">
+                        ${createdSpan}
+                        ${projectBadges}
+                        ${contextBadges}
+                        ${dueSpan}
+                    </div>`;
+                }
 
                 let ageBadgeHtml = '';
                 if (!isDone && item.meta.created) {
@@ -344,8 +379,11 @@
 
                 return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
                     <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
-                    <div class="flex-1 text-[13px] leading-tight flex items-center justify-between" onclick="startInlineEdit(${item.i})">
-                        <span>${html}</span>
+                    <div class="flex-1 leading-tight flex items-center justify-between" onclick="startInlineEdit(${item.i})">
+                        <div class="flex flex-col">
+                            <span class="text-[13px] font-medium tracking-wide text-gray-100">${finalDescriptionHtml || '<span class="opacity-30 italic">[No description]</span>'}</span>
+                            ${metadataRowHtml}
+                        </div>
                         ${ageBadgeHtml}
                     </div>
                     <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
@@ -555,6 +593,7 @@
             }
         }
 
+        // Active layout loop partition sweep
         function sweepCompletedToBottom() {
             if (allTasks.length === 0) return;
             
