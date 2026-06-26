@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.42</title>
+    <title>to-do-txt v4.1.43</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -48,6 +48,7 @@
                 <div class="flex items-center gap-4">
                     <span id="activeFileNameDisplay" class="hidden md:block text-[10px] font-black text-blue-400 border border-blue-500/30 px-2 py-1 rounded bg-blue-500/5 uppercase"></span>
                     <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
+                    <button onclick="toggleSortDirection()" id="sortDirBtn" class="bg-[#262626] text-white border border-gray-700 rounded px-3 py-1 text-[10px] font-bold uppercase">▲ ASC</button>
                     <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-3 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer">
                         <option value="file">File Order</option>
                         <option value="prio">Priority</option>
@@ -100,7 +101,7 @@
                 <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
-                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.42</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
+                <div class="flex justify-between items-center"><span class="text-[9px] font-black uppercase opacity-40">v4.1.43</span><button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button></div>
             </div>
         </aside>
         
@@ -135,7 +136,7 @@
         const CLIENT_ID = 'aqxrpwdf3f2l9hx';
         const REDIRECT_URI = 'https://to-do-txt.github.io/to-do-txt/';
 
-        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showHeaders = true, editingBulk = false, editingIndex = null;
+        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showHeaders = true, editingBulk = false, editingIndex = null, sortAscending = true;
         let addToTop = localStorage.getItem('add_to_top') === 'true';
         let completedFilterMode = localStorage.getItem('completed_filter_mode') || 'all'; 
         let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
@@ -155,7 +156,7 @@
                 if (window.location.hash) history.replaceState(null, null, window.location.pathname);
                 
                 dbx = new Dropbox.Dropbox({ accessToken: token }); 
-                await scanDropboxFiles(); // New: Scan for new files first
+                await scanDropboxFiles();
                 await loadTasks(); 
                 updateFileUI(); 
                 setInterval(loadTasks, 30000); 
@@ -169,6 +170,13 @@
                     hideAutocomplete('inlineAutocompleteDropdown');
                 }
             });
+        }
+
+        function toggleSortDirection() {
+            sortAscending = !sortAscending;
+            const btn = document.getElementById('sortDirBtn');
+            btn.innerText = sortAscending ? '▲ ASC' : '▼ DESC';
+            render();
         }
 
         async function scanDropboxFiles() {
@@ -307,6 +315,8 @@
             const list = document.getElementById('todoList');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const sortVal = document.getElementById('sortOrder').value;
+            const dir = sortAscending ? 1 : -1;
+            
             let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
             
             if (completedFilterMode === 'active') {
@@ -329,10 +339,10 @@
                 else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
             });
 
-            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
-            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
-            else if (sortVal === 'created') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (b.meta.created || '0000').localeCompare(a.meta.created || '0000'));
-            else if (sortVal === 'completed') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : (b.meta.completed || '0000').localeCompare(a.meta.completed || '0000'));
+            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
+            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+            else if (sortVal === 'created') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.created || '0000').localeCompare(b.meta.created || '0000'));
+            else if (sortVal === 'completed') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.completed || '0000').localeCompare(b.meta.completed || '0000'));
 
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim()).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim()).length}`;
             
