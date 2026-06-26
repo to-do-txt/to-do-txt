@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.41</title>
+    <title>to-do-txt v4.1.42</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -155,6 +155,7 @@
                 if (window.location.hash) history.replaceState(null, null, window.location.pathname);
                 
                 dbx = new Dropbox.Dropbox({ accessToken: token }); 
+                await scanDropboxFiles(); // New: Scan for new files first
                 await loadTasks(); 
                 updateFileUI(); 
                 setInterval(loadTasks, 30000); 
@@ -168,6 +169,31 @@
                     hideAutocomplete('inlineAutocompleteDropdown');
                 }
             });
+        }
+
+        async function scanDropboxFiles() {
+            if (!dbx) return;
+            try {
+                const res = await dbx.filesListFolder({ path: '' });
+                const foundFiles = res.result.entries
+                    .filter(entry => entry['.tag'] === 'file' && entry.name.startsWith('todo') && entry.name.endsWith('.txt'))
+                    .map(entry => '/' + entry.name);
+                
+                let updated = false;
+                foundFiles.forEach(f => {
+                    if (!knownFiles.includes(f)) {
+                        knownFiles.push(f);
+                        updated = true;
+                    }
+                });
+
+                if (updated) {
+                    localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles));
+                    updateFileUI();
+                }
+            } catch (e) {
+                console.error("Scan error:", e);
+            }
         }
 
         async function loadTasks() {
@@ -334,7 +360,6 @@
                     cleanDescription = cleanDescription.replace(/^x\s+(\d{4}-\d{2}-\d{2})\s+/, '').replace(/^x\s+/, '');
                 }
                 
-                // Strip priority tokens from description display layout
                 cleanDescription = cleanDescription.replace(/\([A-Z]\)\s*/g, '');
                 if (item.meta.created) {
                     cleanDescription = cleanDescription.replace(new RegExp('^' + item.meta.created + '\\s+'), '');
@@ -352,7 +377,6 @@
                 let hasSublineContent = item.meta.prio || item.meta.created || projectBadges || contextBadges || item.meta.due;
                 
                 if (hasSublineContent) {
-                    // Render priority as a clean plain text token string e.g. "(A)" matching your standard preferences
                     let prioSpan = item.meta.prio ? `<span class="text-orange-400 font-black text-[12px] mr-3 font-mono">${item.meta.prio === 'A' ? '🔥' : item.meta.prio === 'B' ? '⭐' : '📌'} (${item.meta.prio})</span>` : '';
                     let createdSpan = item.meta.created ? `<span class="text-gray-500 text-[11px] font-medium mr-3">📅 ${item.meta.created}</span>` : '';
                     let dueSpan = item.meta.due ? `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold text-[11px]">due:${item.meta.due}</span>` : '';
