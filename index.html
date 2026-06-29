@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.44</title>
+    <title>to-do-txt v4.1.45</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -102,7 +102,7 @@
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.44 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.45 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -524,9 +524,9 @@
             }
             
             if (addToTop) {
-                allTasks.unshift(val);
+                allTasks.unshift(val, ""); // ADDED: Blank line at creation
             } else {
-                allTasks.push(val);
+                allTasks.push("", val);    // ADDED: Blank line at creation
             }
             
             (val.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
