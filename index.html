@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.1.45</title>
+    <title>to-do-txt v4.2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -30,6 +30,7 @@
         details[open] summary { color: #60a5fa; margin-bottom: 0.5rem; }
         .btn-toggle { font-size: 10px; font-weight: 900; padding: 4px 10px; border-radius: 4px; border: 1px solid #333; text-transform: uppercase; transition: all 0.2s; }
         .btn-toggle.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .btn-toggle:disabled { opacity: 0.3; cursor: not-allowed; }
     </style>
 </head>
 <body class="font-sans">
@@ -88,6 +89,16 @@
             </div>
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
                 <section>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Sync</h2>
+                    <div class="flex gap-1 mb-2">
+                        <button onclick="setSyncMode('dropbox')" id="modeBtnDropbox" class="flex-1 btn-toggle">Dropbox</button>
+                        <button onclick="setSyncMode('local')" id="modeBtnLocal" class="flex-1 btn-toggle" title="Chrome/Edge only">Local Folder</button>
+                    </div>
+                    <button onclick="connectLocalFolder()" id="connectLocalBtn" class="hidden w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all mb-1">Connect Folder</button>
+                    <button onclick="disconnectLocal()" id="disconnectLocalBtn" class="hidden w-full text-[10px] font-black border border-red-900/50 text-red-500 py-2 rounded uppercase">Disconnect Folder</button>
+                    <p id="syncModeHint" class="text-[9px] opacity-40 mt-2 leading-tight"></p>
+                </section>
+                <section>
                     <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">File Manager</h2>
                     <div id="fileList" class="space-y-1 mb-4"></div>
                     <button onclick="showFileManager()" class="w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all">Manage Project List</button>
@@ -102,7 +113,7 @@
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.1.45 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.2.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -147,12 +158,38 @@
         
         let existingProjects = new Set(), existingContexts = new Set();
 
-        async function init() {
-            const urlParams = new URLSearchParams(window.location.hash.substring(1));
-            const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
+        // --- Sync mode (Dropbox vs Local Folder) ---
+        let syncMode = localStorage.getItem('sync_mode') || 'dropbox'; // 'dropbox' | 'local'
+        let localDirHandle = null;
+        let pollInterval = null;
+        const HAS_FS_ACCESS = typeof window.showDirectoryPicker === 'function';
 
+        async function init() {
             if (addToTop) document.getElementById('toggleTopBtn').classList.add('active');
             updateCompletedFilterButtonUI();
+            updateSyncModeUI();
+
+            document.addEventListener('click', (e) => {
+                if (e.target.id !== 'newTodo' && e.target.id !== 'inlineEditInput') {
+                    hideAutocomplete('autocompleteDropdown');
+                    hideAutocomplete('inlineAutocompleteDropdown');
+                }
+            });
+
+            if (syncMode === 'local') {
+                const restored = await tryRestoreLocalHandle();
+                updateSyncModeUI();
+                if (restored) {
+                    await loadTasks();
+                    updateFileUI();
+                    startPolling();
+                }
+                return; // skip Dropbox auth entirely while in local mode
+            }
+
+            // --- Dropbox flow ---
+            const urlParams = new URLSearchParams(window.location.hash.substring(1));
+            const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
 
             if (token) { 
                 localStorage.setItem('dbx_token', token);
@@ -162,17 +199,15 @@
                 await scanDropboxFiles();
                 await loadTasks(); 
                 updateFileUI(); 
-                setInterval(loadTasks, 30000); 
+                startPolling();
             } else { 
                 handleAuth(); 
             }
-            
-            document.addEventListener('click', (e) => {
-                if (e.target.id !== 'newTodo' && e.target.id !== 'inlineEditInput') {
-                    hideAutocomplete('autocompleteDropdown');
-                    hideAutocomplete('inlineAutocompleteDropdown');
-                }
-            });
+        }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(loadTasks, 30000);
         }
 
         function toggleSortDirection() {
@@ -181,6 +216,268 @@
             btn.innerText = sortAscending ? '▲ ASC' : '▼ DESC';
             render();
         }
+
+        // =====================================================================
+        // SYNC MODE: shared dispatchers
+        // =====================================================================
+
+        async function loadTasks() {
+            if (isSyncing || editingBulk || editingIndex !== null) return;
+            if (syncMode === 'local') return loadTasksLocal();
+            return loadTasksDropbox();
+        }
+
+        async function saveTasks() {
+            if (syncMode === 'local') return saveTasksLocal();
+            return saveTasksDropbox();
+        }
+
+        async function setSyncMode(mode) {
+            if (mode === syncMode) {
+                updateSyncModeUI();
+                return;
+            }
+            if (mode === 'local' && !HAS_FS_ACCESS) {
+                alert('Local Folder sync needs the File System Access API, available in Chrome, Edge, or other Chromium-based browsers. Staying on Dropbox.');
+                return;
+            }
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+            syncMode = mode;
+            localStorage.setItem('sync_mode', mode);
+            updateSyncModeUI();
+
+            if (mode === 'local') {
+                if (localDirHandle) {
+                    const ok = await verifyPermission(localDirHandle, true);
+                    if (ok) {
+                        await scanLocalFiles();
+                        await loadTasks();
+                        updateFileUI();
+                        startPolling();
+                    }
+                } else {
+                    await connectLocalFolder();
+                }
+            } else {
+                const token = localStorage.getItem('dbx_token');
+                if (token) {
+                    dbx = new Dropbox.Dropbox({ accessToken: token });
+                    await scanDropboxFiles();
+                    await loadTasks();
+                    updateFileUI();
+                    startPolling();
+                } else {
+                    handleAuth();
+                }
+            }
+        }
+
+        function updateSyncModeUI() {
+            const dropboxBtn = document.getElementById('modeBtnDropbox');
+            const localBtn = document.getElementById('modeBtnLocal');
+            const connectBtn = document.getElementById('connectLocalBtn');
+            const disconnectBtn = document.getElementById('disconnectLocalBtn');
+            const hint = document.getElementById('syncModeHint');
+
+            dropboxBtn.classList.toggle('active', syncMode === 'dropbox');
+            localBtn.classList.toggle('active', syncMode === 'local');
+            localBtn.disabled = !HAS_FS_ACCESS;
+
+            if (syncMode === 'local') {
+                if (localDirHandle) {
+                    connectBtn.classList.add('hidden');
+                    disconnectBtn.classList.remove('hidden');
+                    hint.innerText = 'Reading/writing todo*.txt files in your chosen folder.';
+                } else {
+                    connectBtn.classList.remove('hidden');
+                    connectBtn.innerText = 'Connect Folder';
+                    disconnectBtn.classList.add('hidden');
+                    hint.innerText = HAS_FS_ACCESS ? 'Pick a folder on this device to sync with.' : 'Not supported in this browser — use Chrome or Edge.';
+                }
+            } else {
+                connectBtn.classList.add('hidden');
+                disconnectBtn.classList.add('hidden');
+                hint.innerText = '';
+            }
+        }
+
+        // =====================================================================
+        // LOCAL FOLDER SYNC (File System Access API)
+        // =====================================================================
+
+        function idbOpen() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open('todotxt-fs', 1);
+                req.onupgradeneeded = () => req.result.createObjectStore('handles');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function idbGet(key) {
+            const db = await idbOpen();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readonly');
+                const r = tx.objectStore('handles').get(key);
+                r.onsuccess = () => resolve(r.result || null);
+                r.onerror = () => reject(r.error);
+            });
+        }
+        async function idbSet(key, value) {
+            const db = await idbOpen();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readwrite');
+                tx.objectStore('handles').put(value, key);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async function verifyPermission(handle, readWrite) {
+            const opts = readWrite ? { mode: 'readwrite' } : {};
+            if ((await handle.queryPermission(opts)) === 'granted') return true;
+            try {
+                if ((await handle.requestPermission(opts)) === 'granted') return true;
+            } catch (e) { /* requestPermission needs a user gesture; ignore if it throws */ }
+            return false;
+        }
+
+        // Called on load: checks for a remembered handle without prompting (queryPermission
+        // never needs a user gesture). If permission has lapsed, the UI falls back to a
+        // "Connect Folder" button the user can tap to re-grant access.
+        async function tryRestoreLocalHandle() {
+            try {
+                const handle = await idbGet('dir');
+                if (!handle) return false;
+                localDirHandle = handle;
+                const granted = await handle.queryPermission({ mode: 'readwrite' });
+                if (granted === 'granted') {
+                    await scanLocalFiles();
+                    return true;
+                }
+                setStatus('Tap "Connect Folder" to resume');
+                return false;
+            } catch (e) {
+                console.error('Restore handle failed:', e);
+                localDirHandle = null;
+                return false;
+            }
+        }
+
+        // Triggered by a click, so this is allowed to prompt the OS folder picker
+        // and/or the permission dialog.
+        async function connectLocalFolder() {
+            if (!HAS_FS_ACCESS) {
+                alert('Local Folder sync needs Chrome, Edge, or another Chromium-based browser.');
+                return;
+            }
+            try {
+                let handle = localDirHandle;
+                if (!handle) {
+                    handle = await window.showDirectoryPicker();
+                }
+                const ok = await verifyPermission(handle, true);
+                if (!ok) { setStatus('Permission denied'); return; }
+
+                localDirHandle = handle;
+                await idbSet('dir', handle);
+                syncMode = 'local';
+                localStorage.setItem('sync_mode', 'local');
+
+                await scanLocalFiles();
+                updateFileUI();
+                await loadTasks();
+                updateSyncModeUI();
+                startPolling();
+            } catch (e) {
+                if (e.name !== 'AbortError') { console.error('Connect folder failed:', e); setStatus('Connect Error'); }
+            }
+        }
+
+        async function disconnectLocal() {
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+            localDirHandle = null;
+            try { await idbSet('dir', null); } catch (e) { /* ignore */ }
+            allTasks = [];
+            await setSyncMode('dropbox');
+        }
+
+        async function scanLocalFiles() {
+            if (!localDirHandle) return;
+            try {
+                const found = [];
+                for await (const [name, entry] of localDirHandle.entries()) {
+                    if (entry.kind === 'file' && name.startsWith('todo') && name.endsWith('.txt')) {
+                        found.push('/' + name);
+                    }
+                }
+                let updated = false;
+                found.forEach(f => { if (!knownFiles.includes(f)) { knownFiles.push(f); updated = true; } });
+                if (updated) { localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); updateFileUI(); }
+            } catch (e) {
+                console.error('Scan local folder error:', e);
+            }
+        }
+
+        async function loadTasksLocal() {
+            if (!localDirHandle) return;
+            isSyncing = true; setStatus('Reading...', true);
+            try {
+                const fileName = currentFile.replace(/^\//, '');
+                const fileHandle = await localDirHandle.getFileHandle(fileName, { create: true });
+                const file = await fileHandle.getFile();
+                const text = await file.text();
+                allTasks = text.split('\n');
+
+                existingProjects.clear();
+                existingContexts.clear();
+                allTasks.forEach(t => {
+                    (t.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+                    (t.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+                });
+
+                render();
+                setStatus(`Loaded ${new Date().toLocaleTimeString([], {hour12:false})}`);
+            } catch (e) {
+                console.error('Local read error:', e);
+                if (e.name === 'NotAllowedError') {
+                    updateSyncModeUI();
+                    const btn = document.getElementById('connectLocalBtn');
+                    btn.classList.remove('hidden');
+                    btn.innerText = 'Reconnect Folder';
+                    setStatus('Tap Reconnect Folder');
+                } else {
+                    setStatus('Read Error');
+                }
+            } finally { isSyncing = false; }
+        }
+
+        async function saveTasksLocal() {
+            if (!localDirHandle) return;
+            isSyncing = true; setStatus('Writing...', true);
+            try {
+                const fileName = currentFile.replace(/^\//, '');
+                const fileHandle = await localDirHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(allTasks.join('\n'));
+                await writable.close();
+                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`);
+            } catch (e) {
+                console.error('Local write error:', e);
+                if (e.name === 'NotAllowedError') {
+                    updateSyncModeUI();
+                    const btn = document.getElementById('connectLocalBtn');
+                    btn.classList.remove('hidden');
+                    btn.innerText = 'Reconnect Folder';
+                    setStatus('Tap Reconnect Folder');
+                } else {
+                    setStatus('Write Error');
+                }
+            } finally { isSyncing = false; }
+        }
+
+        // =====================================================================
+        // DROPBOX SYNC (unchanged logic, renamed to *Dropbox)
+        // =====================================================================
 
         async function scanDropboxFiles() {
             if (!dbx) return;
@@ -207,7 +504,7 @@
             }
         }
 
-        async function loadTasks() {
+        async function loadTasksDropbox() {
             if (!dbx || isSyncing || editingBulk || editingIndex !== null) return;
             isSyncing = true; setStatus(`Syncing...`, true);
             try {
@@ -233,7 +530,7 @@
             } finally { isSyncing = false; }
         }
 
-        async function saveTasks() {
+        async function saveTasksDropbox() {
             if (!dbx || !navigator.onLine) return;
             isSyncing = true; setStatus("Saving...", true);
             try { 
@@ -725,7 +1022,12 @@
             if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); renderBulkList(); updateFileUI(); }
             input.value = "";
         }
-        function hardLogout() { localStorage.clear(); location.reload(); }
+        async function hardLogout() {
+            if (pollInterval) clearInterval(pollInterval);
+            try { await idbSet('dir', null); } catch (e) { /* ignore */ }
+            localStorage.clear();
+            location.reload();
+        }
         init();
     </script>
 </body>
