@@ -3,66 +3,1057 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.2.1-offline</title>
+    <title>to-do-txt v4.2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
         :root { --bg-app: #121212; --bg-card: #1e1e1e; --bg-input: #0a0a0a; --text-main: #e5e7eb; --text-muted: #9ca3af; --border: #333; }
         body { background-color: var(--bg-app); color: var(--text-main); overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        /* ... existing styles ... */
+        .app-grid { display: grid; grid-template-columns: 280px 1fr; flex: 1; overflow: hidden; }
+        @media (max-width: 768px) { 
+            .app-grid { grid-template-columns: 1fr; } 
+            #sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000; width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; transform: translateX(-100%); transition: transform 0.2s ease; }
+            #sidebar.sidebar-open { transform: translateX(0); }
+        }
+        .file-active { border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.1); font-weight: 900; color: #3b82f6; }
+        .h1-style { font-size: 1.1rem; font-weight: 900; color: #3b82f6; border-bottom: 2px solid #3b82f6; margin: 1.5rem 0 0.5rem 0; text-transform: uppercase; }
+        .h2-style { font-size: 0.9rem; font-weight: 800; color: #60a5fa; border-bottom: 1px solid #333; margin: 1.25rem 0 0.4rem 0; text-transform: uppercase; }
+        .card-bg { background-color: var(--bg-card); border-color: var(--border); }
+        .input-bg { background-color: var(--bg-input); border-color: var(--border); color: var(--text-main); }
+        .prio-a { border-color: #fb923c; } .prio-b { border-color: #facc15; } .prio-none { border-color: #3b82f6; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+        summary { cursor: pointer; list-style: none; outline: none; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+        summary::-webkit-details-marker { display: none; }
+        .toggle-icon::before { content: "[+]"; font-family: monospace; font-weight: bold; color: #3b82f6; font-size: 14px; }
+        details[open] .toggle-icon::before { content: "[-]"; color: #ef4444; }
+        details[open] summary { color: #60a5fa; margin-bottom: 0.5rem; }
+        .btn-toggle { font-size: 10px; font-weight: 900; padding: 4px 10px; border-radius: 4px; border: 1px solid #333; text-transform: uppercase; transition: all 0.2s; }
+        .btn-toggle.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .btn-toggle:disabled { opacity: 0.3; cursor: not-allowed; }
     </style>
 </head>
 <body class="font-sans">
 
+    <header class="p-4 md:p-6 card-bg border-b shadow-lg relative z-50">
+        <div class="max-w-6xl mx-auto flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button onclick="toggleSidebar()" class="md:hidden text-muted text-xl p-1">☰</button>
+                    <div class="font-black text-2xl text-blue-500 tracking-tighter cursor-pointer" onclick="resetFilters()">to-do-txt</div>
+                    <div class="flex items-center gap-2 px-3 py-1 bg-black/20 rounded-full border border-white/5">
+                        <div id="syncIndicator" class="w-2 h-2 rounded-full bg-gray-600"></div>
+                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-widest opacity-60 text-gray-400">Ready</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span id="activeFileNameDisplay" class="hidden md:block text-[10px] font-black text-blue-400 border border-blue-500/30 px-2 py-1 rounded bg-blue-500/5 uppercase"></span>
+                    <span id="viewCounter" class="text-[10px] font-bold uppercase tracking-widest text-blue-400/60">0/0</span>
+                    <button onclick="toggleSortDirection()" id="sortDirBtn" class="bg-[#262626] text-white border border-gray-700 rounded px-3 py-1 text-[10px] font-bold uppercase">▲ ASC</button>
+                    <select id="sortOrder" onchange="render()" class="bg-[#262626] text-white border border-gray-700 rounded-lg px-3 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer">
+                        <option value="file">File Order</option>
+                        <option value="prio">Priority</option>
+                        <option value="due">Due Date</option>
+                        <option value="created">Created Date</option>
+                        <option value="completed">Completed Date</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row gap-3">
+                <input type="text" id="searchInput" oninput="render()" placeholder="Search..." class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                <div class="relative flex-[2] flex flex-col">
+                    <div class="flex gap-2">
+                        <input type="text" id="newTodo" autocomplete="off" oninput="handleInputAutocomplete(this, 'autocompleteDropdown')" onkeydown="handleInputKeyDown(event)" placeholder="What needs to be done? (e.g. (A) Call mom due:tomorrow)" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                        <button onclick="addTask()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add</button>
+                    </div>
+                    <div id="autocompleteDropdown" class="hidden absolute left-0 right-0 top-full mt-1 card-bg border rounded-lg shadow-xl max-h-48 overflow-y-auto z-[200] p-1 space-y-0.5"></div>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-white/5">
+                <button onclick="cycleCompletedFilter()" id="toggleCompBtn" class="btn-toggle active">Completed: Show All</button>
+                <button onclick="toggleHeaders()" id="toggleHeadBtn" class="btn-toggle active">Headers</button>
+                <button onclick="toggleAddToTop()" id="toggleTopBtn" class="btn-toggle">Add to Top</button>
+                <button onclick="sweepCompletedToBottom()" class="btn-toggle hover:bg-white/5 border border-blue-500/30 text-blue-400">Sweep Done</button>
+                <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
+                <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
+                <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Backup</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-grid">
+        <aside id="sidebar" class="card-bg border-r overflow-hidden flex flex-col">
+            <div class="p-6 flex justify-between items-center md:hidden border-b border-gray-800">
+                <span class="font-black text-blue-500 uppercase text-xs tracking-widest">FILES</span>
+                <button onclick="toggleSidebar()" class="text-xl px-2">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <section>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Sync</h2>
+                    <div class="flex gap-1 mb-2">
+                        <button onclick="setSyncMode('dropbox')" id="modeBtnDropbox" class="flex-1 btn-toggle">Dropbox</button>
+                        <button onclick="setSyncMode('local')" id="modeBtnLocal" class="flex-1 btn-toggle" title="Chrome/Edge only">Local Folder</button>
+                    </div>
+                    <button onclick="connectLocalFolder()" id="connectLocalBtn" class="hidden w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all mb-1">Connect Folder</button>
+                    <button onclick="disconnectLocal()" id="disconnectLocalBtn" class="hidden w-full text-[10px] font-black border border-red-900/50 text-red-500 py-2 rounded uppercase">Disconnect Folder</button>
+                    <p id="syncModeHint" class="text-[9px] opacity-40 mt-2 leading-tight"></p>
+                </section>
+                <section>
+                    <h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">File Manager</h2>
+                    <div id="fileList" class="space-y-1 mb-4"></div>
+                    <button onclick="showFileManager()" class="w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all">Manage Project List</button>
+                </section>
+                <button onclick="resetFilters()" class="w-full text-[10px] font-black border border-blue-500/30 text-blue-500 py-2 rounded-lg uppercase">Clear Filters</button>
+                <section><h2 class="text-[10px] font-black text-gray-500 mb-4 uppercase tracking-widest">Date Dashboard</h2><div id="dateList" class="space-y-1 text-xs"></div></section>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Due Dates <span class="toggle-icon"></span></summary><div id="specificDateList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Created Dates <span class="toggle-icon"></span></summary><div id="createdDateList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Priorities <span class="toggle-icon"></span></summary><div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Projects <span class="toggle-icon"></span></summary><div id="projectList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
+            </div>
+            <div class="p-6 border-t border-gray-800 bg-black/20">
+                <div class="flex justify-between items-center">
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.2.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
+                    <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
+                </div>
+            </div>
+        </aside>
+        
+        <main class="p-4 md:p-10 overflow-y-auto relative">
+            <div id="todoList" class="max-w-4xl mx-auto space-y-0.5 pb-20"></div>
+            
+            <div id="bulkEditArea" class="hidden max-w-4xl mx-auto space-y-4 pb-20">
+                <textarea id="bulkInput" class="w-full h-[60vh] input-bg border rounded-lg p-4 font-mono text-sm outline-none focus:border-blue-500" placeholder="One task per line..."></textarea>
+                <div class="flex gap-2">
+                    <button onclick="saveBulk()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Save Changes</button>
+                    <button onclick="toggleBulkEdit()" class="bg-gray-800 px-6 py-2 rounded-lg font-bold text-sm text-white">Cancel</button>
+                </div>
+            </div>
+
+            <div id="fileManagerOverlay" class="hidden absolute inset-0 bg-[#121212]/95 z-[100] p-4 md:p-10 overflow-y-auto">
+                <div class="max-w-2xl mx-auto">
+                    <div class="flex justify-between items-center mb-8"><h2 class="text-2xl font-black text-blue-500 uppercase tracking-tighter">Manage Project Registry</h2><button onclick="hideFileManager()" class="text-2xl opacity-50 hover:opacity-100">✕</button></div>
+                    <div class="card-bg border p-6 rounded-xl mb-8">
+                        <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Add / Create Project</h3>
+                        <div class="flex gap-2">
+                            <input type="text" id="bulkFileName" maxlength="20" placeholder="NAME (E.G. WORK)" class="flex-1 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500 uppercase">
+                            <button onclick="addProjectFromBulk()" class="bg-blue-600 px-6 py-2 rounded-lg font-bold text-sm text-white">Add to List</button>
+                        </div>
+                    </div>
+                    <div id="bulkFileList" class="space-y-2"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
     <script>
-        // --- OFFLINE SERVICE WORKER (PWA) ---
-        const swCode = `
-            const CACHE_NAME = 'todo-txt-v4.2.1';
-            self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll([location.href]))); });
-            self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))); });
-        `;
-        const blob = new Blob([swCode], { type: 'application/javascript' });
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register(URL.createObjectURL(blob));
+        const CLIENT_ID = 'aqxrpwdf3f2l9hx';
+        const REDIRECT_URI = 'https://to-do-txt.github.io/to-do-txt/';
+
+        let dbx, allTasks = [], activeFilters = new Set(), isSyncing = false, showHeaders = true, editingBulk = false, editingIndex = null, sortAscending = true;
+        let addToTop = localStorage.getItem('add_to_top') === 'true';
+        let completedFilterMode = localStorage.getItem('completed_filter_mode') || 'all'; 
+        let currentFile = localStorage.getItem('last_todo_file') || '/todo.txt';
+        let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
+        
+        let existingProjects = new Set(), existingContexts = new Set();
+
+        // --- Sync mode (Dropbox vs Local Folder) ---
+        // No default: stays null until the person explicitly picks a backend
+        // (either on this visit, or a prior one that set it in localStorage).
+        let syncMode = localStorage.getItem('sync_mode') || null; // null | 'dropbox' | 'local'
+        let localDirHandle = null;
+        let pollInterval = null;
+        const HAS_FS_ACCESS = typeof window.showDirectoryPicker === 'function';
+
+        async function init() {
+            if (addToTop) document.getElementById('toggleTopBtn').classList.add('active');
+            updateCompletedFilterButtonUI();
+            updateSyncModeUI();
+
+            document.addEventListener('click', (e) => {
+                if (e.target.id !== 'newTodo' && e.target.id !== 'inlineEditInput') {
+                    hideAutocomplete('autocompleteDropdown');
+                    hideAutocomplete('inlineAutocompleteDropdown');
+                }
+            });
+
+            if (!syncMode) {
+                // First-ever visit (or after Disconnect/Logout): don't assume a backend,
+                // don't redirect to Dropbox OAuth. Wait for an explicit choice.
+                showSyncChooser();
+                return;
+            }
+
+            if (syncMode === 'local') {
+                const restored = await tryRestoreLocalHandle();
+                updateSyncModeUI();
+                if (restored) {
+                    await loadTasks();
+                    updateFileUI();
+                    startPolling();
+                }
+                return; // skip Dropbox auth entirely while in local mode
+            }
+
+            // --- Dropbox flow (only reached if the person previously chose Dropbox) ---
+            const urlParams = new URLSearchParams(window.location.hash.substring(1));
+            const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
+
+            if (token) { 
+                localStorage.setItem('dbx_token', token);
+                if (window.location.hash) history.replaceState(null, null, window.location.pathname);
+                
+                dbx = new Dropbox.Dropbox({ accessToken: token }); 
+                await scanDropboxFiles();
+                await loadTasks(); 
+                updateFileUI(); 
+                startPolling();
+            } else { 
+                handleAuth(); 
+            }
         }
 
-        // --- SYNC QUEUE LOGIC ---
-        window.addEventListener('online', syncOfflineQueue);
-        window.addEventListener('offline', () => { if (syncMode === 'dropbox') setStatus("Offline Mode Active", false, 'bg-yellow-500'); });
+        function showSyncChooser() {
+            setStatus('Choose a sync method');
+            document.getElementById('todoList').innerHTML = `
+                <div class="max-w-md mx-auto text-center mt-16 space-y-4">
+                    <div class="text-sm font-bold text-gray-300">Pick how you'd like to sync your tasks</div>
+                    <div class="text-xs opacity-50">You can change this later from the Sync section in the sidebar.</div>
+                    <div class="flex flex-col gap-2 mt-6">
+                        <button onclick="setSyncMode('dropbox')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-widest py-3 rounded-lg">Connect Dropbox</button>
+                        <button onclick="setSyncMode('local')" ${HAS_FS_ACCESS ? '' : 'disabled'} class="border border-blue-500/30 text-blue-400 text-xs font-black uppercase tracking-widest py-3 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed">
+                            Connect Local Folder ${HAS_FS_ACCESS ? '' : '(needs Chrome/Edge)'}
+                        </button>
+                    </div>
+                </div>`;
+            if (window.innerWidth < 768) toggleSidebar();
+        }
 
-        async function syncOfflineQueue() {
-            const queuedTasks = localStorage.getItem('offline_queue_tasks');
-            const queuedFile = localStorage.getItem('offline_queue_file');
-            if (queuedTasks && queuedFile && navigator.onLine && syncMode === 'dropbox') {
-                setStatus("Pushing offline changes...", true);
-                try {
-                    const contents = JSON.parse(queuedTasks).join('\n');
-                    await dbx.filesUpload({ path: queuedFile, contents: contents, mode: {".tag":"overwrite"} });
-                    localStorage.removeItem('offline_queue_tasks');
-                    localStorage.removeItem('offline_queue_file');
-                    setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
-                    if (queuedFile === currentFile) await loadTasksDropbox();
-                } catch(e) { setStatus("Error syncing queue", false, 'bg-red-500'); }
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(loadTasks, 30000);
+        }
+
+        function toggleSortDirection() {
+            sortAscending = !sortAscending;
+            const btn = document.getElementById('sortDirBtn');
+            btn.innerText = sortAscending ? '▲ ASC' : '▼ DESC';
+            render();
+        }
+
+        // =====================================================================
+        // SYNC MODE: shared dispatchers
+        // =====================================================================
+
+        async function loadTasks() {
+            if (isSyncing || editingBulk || editingIndex !== null) return;
+            if (syncMode === 'local') return loadTasksLocal();
+            return loadTasksDropbox();
+        }
+
+        async function saveTasks() {
+            if (syncMode === 'local') return saveTasksLocal();
+            return saveTasksDropbox();
+        }
+
+        async function setSyncMode(mode) {
+            if (mode === syncMode) {
+                updateSyncModeUI();
+                return;
             }
+            if (mode === 'local' && !HAS_FS_ACCESS) {
+                alert('Local Folder sync needs the File System Access API, available in Chrome, Edge, or other Chromium-based browsers. Staying on Dropbox.');
+                return;
+            }
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+            syncMode = mode;
+            localStorage.setItem('sync_mode', mode);
+            updateSyncModeUI();
+
+            if (mode === 'local') {
+                if (localDirHandle) {
+                    const ok = await verifyPermission(localDirHandle, true);
+                    if (ok) {
+                        await scanLocalFiles();
+                        await loadTasks();
+                        updateFileUI();
+                        startPolling();
+                    }
+                } else {
+                    await connectLocalFolder();
+                }
+            } else {
+                const token = localStorage.getItem('dbx_token');
+                if (token) {
+                    dbx = new Dropbox.Dropbox({ accessToken: token });
+                    await scanDropboxFiles();
+                    await loadTasks();
+                    updateFileUI();
+                    startPolling();
+                } else {
+                    handleAuth();
+                }
+            }
+        }
+
+        function updateSyncModeUI() {
+            const dropboxBtn = document.getElementById('modeBtnDropbox');
+            const localBtn = document.getElementById('modeBtnLocal');
+            const connectBtn = document.getElementById('connectLocalBtn');
+            const disconnectBtn = document.getElementById('disconnectLocalBtn');
+            const hint = document.getElementById('syncModeHint');
+
+            dropboxBtn.classList.toggle('active', syncMode === 'dropbox');
+            localBtn.classList.toggle('active', syncMode === 'local');
+            localBtn.disabled = !HAS_FS_ACCESS;
+
+            if (syncMode === 'local') {
+                if (localDirHandle) {
+                    connectBtn.classList.add('hidden');
+                    disconnectBtn.classList.remove('hidden');
+                    hint.innerText = 'Reading/writing todo*.txt files in your chosen folder.';
+                } else {
+                    connectBtn.classList.remove('hidden');
+                    connectBtn.innerText = 'Connect Folder';
+                    disconnectBtn.classList.add('hidden');
+                    hint.innerText = HAS_FS_ACCESS ? 'Pick a folder on this device to sync with.' : 'Not supported in this browser — use Chrome or Edge.';
+                }
+            } else {
+                connectBtn.classList.add('hidden');
+                disconnectBtn.classList.add('hidden');
+                hint.innerText = '';
+            }
+        }
+
+        // =====================================================================
+        // LOCAL FOLDER SYNC (File System Access API)
+        // =====================================================================
+
+        function idbOpen() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open('todotxt-fs', 1);
+                req.onupgradeneeded = () => req.result.createObjectStore('handles');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function idbGet(key) {
+            const db = await idbOpen();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readonly');
+                const r = tx.objectStore('handles').get(key);
+                r.onsuccess = () => resolve(r.result || null);
+                r.onerror = () => reject(r.error);
+            });
+        }
+        async function idbSet(key, value) {
+            const db = await idbOpen();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readwrite');
+                tx.objectStore('handles').put(value, key);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async function verifyPermission(handle, readWrite) {
+            const opts = readWrite ? { mode: 'readwrite' } : {};
+            if ((await handle.queryPermission(opts)) === 'granted') return true;
+            try {
+                if ((await handle.requestPermission(opts)) === 'granted') return true;
+            } catch (e) { /* requestPermission needs a user gesture; ignore if it throws */ }
+            return false;
+        }
+
+        // Called on load: checks for a remembered handle without prompting (queryPermission
+        // never needs a user gesture). If permission has lapsed, the UI falls back to a
+        // "Connect Folder" button the user can tap to re-grant access.
+        async function tryRestoreLocalHandle() {
+            try {
+                const handle = await idbGet('dir');
+                if (!handle) return false;
+                localDirHandle = handle;
+                const granted = await handle.queryPermission({ mode: 'readwrite' });
+                if (granted === 'granted') {
+                    await scanLocalFiles();
+                    return true;
+                }
+                setStatus('Tap "Connect Folder" to resume');
+                return false;
+            } catch (e) {
+                console.error('Restore handle failed:', e);
+                localDirHandle = null;
+                return false;
+            }
+        }
+
+        // Triggered by a click, so this is allowed to prompt the OS folder picker
+        // and/or the permission dialog.
+        async function connectLocalFolder() {
+            if (!HAS_FS_ACCESS) {
+                alert('Local Folder sync needs Chrome, Edge, or another Chromium-based browser.');
+                return;
+            }
+            try {
+                let handle = localDirHandle;
+                if (!handle) {
+                    handle = await window.showDirectoryPicker();
+                }
+                const ok = await verifyPermission(handle, true);
+                if (!ok) { setStatus('Permission denied'); return; }
+
+                localDirHandle = handle;
+                await idbSet('dir', handle);
+                syncMode = 'local';
+                localStorage.setItem('sync_mode', 'local');
+
+                await scanLocalFiles();
+                updateFileUI();
+                await loadTasks();
+                updateSyncModeUI();
+                startPolling();
+            } catch (e) {
+                if (e.name !== 'AbortError') { console.error('Connect folder failed:', e); setStatus('Connect Error'); }
+            }
+        }
+
+        async function disconnectLocal() {
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+            localDirHandle = null;
+            try { await idbSet('dir', null); } catch (e) { /* ignore */ }
+            allTasks = [];
+            await setSyncMode('dropbox');
+        }
+
+        async function scanLocalFiles() {
+            if (!localDirHandle) return;
+            try {
+                const found = [];
+                for await (const [name, entry] of localDirHandle.entries()) {
+                    if (entry.kind === 'file' && name.startsWith('todo') && name.endsWith('.txt')) {
+                        found.push('/' + name);
+                    }
+                }
+                let updated = false;
+                found.forEach(f => { if (!knownFiles.includes(f)) { knownFiles.push(f); updated = true; } });
+                if (updated) { localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); updateFileUI(); }
+            } catch (e) {
+                console.error('Scan local folder error:', e);
+            }
+        }
+
+        async function loadTasksLocal() {
+            if (!localDirHandle) return;
+            isSyncing = true; setStatus('Reading...', true);
+            try {
+                const fileName = currentFile.replace(/^\//, '');
+                const fileHandle = await localDirHandle.getFileHandle(fileName, { create: true });
+                const file = await fileHandle.getFile();
+                const text = await file.text();
+                allTasks = text.split('\n');
+
+                existingProjects.clear();
+                existingContexts.clear();
+                allTasks.forEach(t => {
+                    (t.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+                    (t.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+                });
+
+                render();
+                setStatus(`Loaded ${new Date().toLocaleTimeString([], {hour12:false})}`);
+            } catch (e) {
+                console.error('Local read error:', e);
+                if (e.name === 'NotAllowedError') {
+                    updateSyncModeUI();
+                    const btn = document.getElementById('connectLocalBtn');
+                    btn.classList.remove('hidden');
+                    btn.innerText = 'Reconnect Folder';
+                    setStatus('Tap Reconnect Folder');
+                } else {
+                    setStatus('Read Error');
+                }
+            } finally { isSyncing = false; }
+        }
+
+        async function saveTasksLocal() {
+            if (!localDirHandle) return;
+            isSyncing = true; setStatus('Writing...', true);
+            try {
+                const fileName = currentFile.replace(/^\//, '');
+                const fileHandle = await localDirHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(allTasks.join('\n'));
+                await writable.close();
+                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`);
+            } catch (e) {
+                console.error('Local write error:', e);
+                if (e.name === 'NotAllowedError') {
+                    updateSyncModeUI();
+                    const btn = document.getElementById('connectLocalBtn');
+                    btn.classList.remove('hidden');
+                    btn.innerText = 'Reconnect Folder';
+                    setStatus('Tap Reconnect Folder');
+                } else {
+                    setStatus('Write Error');
+                }
+            } finally { isSyncing = false; }
+        }
+
+        // =====================================================================
+        // DROPBOX SYNC (unchanged logic, renamed to *Dropbox)
+        // =====================================================================
+
+        async function scanDropboxFiles() {
+            if (!dbx) return;
+            try {
+                const res = await dbx.filesListFolder({ path: '' });
+                const foundFiles = res.result.entries
+                    .filter(entry => entry['.tag'] === 'file' && entry.name.startsWith('todo') && entry.name.endsWith('.txt'))
+                    .map(entry => '/' + entry.name);
+                
+                let updated = false;
+                foundFiles.forEach(f => {
+                    if (!knownFiles.includes(f)) {
+                        knownFiles.push(f);
+                        updated = true;
+                    }
+                });
+
+                if (updated) {
+                    localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles));
+                    updateFileUI();
+                }
+            } catch (e) {
+                console.error("Scan error:", e);
+            }
+        }
+
+        async function loadTasksDropbox() {
+            if (!dbx || isSyncing || editingBulk || editingIndex !== null) return;
+            isSyncing = true; setStatus(`Syncing...`, true);
+            try {
+                const res = await dbx.filesDownload({ path: currentFile });
+                const text = await res.result.fileBlob.text();
+                allTasks = text.split('\n');
+                
+                existingProjects.clear();
+                existingContexts.clear();
+                allTasks.forEach(t => {
+                    (t.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+                    (t.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+                });
+
+                render();
+                setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
+            } catch (e) { 
+                if (e.status === 401 || e.status === 400) {
+                    handleAuthRecovery();
+                } else {
+                    setStatus("Sync Error");
+                }
+            } finally { isSyncing = false; }
         }
 
         async function saveTasksDropbox() {
-            if (!dbx) return;
-            if (!navigator.onLine) {
-                localStorage.setItem('offline_queue_file', currentFile);
-                localStorage.setItem('offline_queue_tasks', JSON.stringify(allTasks));
-                setStatus("Saved Locally (Offline)", false, 'bg-yellow-500');
-                return; 
-            }
-            // ... original online save logic ...
+            if (!dbx || !navigator.onLine) return;
+            isSyncing = true; setStatus("Saving...", true);
+            try { 
+                const contents = allTasks.join('\n');
+                await dbx.filesUpload({ path: currentFile, contents: contents, mode: {".tag":"overwrite"} }); 
+                setStatus(`Saved ${new Date().toLocaleTimeString([], {hour12:false})}`); 
+            } catch (e) { 
+                if (e.status === 401 || e.status === 400) {
+                    handleAuthRecovery();
+                } else {
+                    setStatus("Save Error"); 
+                }
+            } finally { isSyncing = false; }
         }
 
-        async function init() {
-            // ... existing init logic ...
-            await syncOfflineQueue(); // Run on startup
-            // ...
+        function handleAuthRecovery() {
+            setStatus("Session Expired - Reauthenticating...");
+            localStorage.removeItem('dbx_token');
+            setTimeout(() => { handleAuth(); }, 800);
         }
-        // ... rest of your code ...
+
+        function calculateAgeString(createdDateStr) {
+            if (!createdDateStr) return '';
+            const created = new Date(createdDateStr + 'T00:00:00');
+            if (isNaN(created.getTime())) return '';
+            const now = new Date();
+            now.setHours(0,0,0,0);
+            
+            const diffTime = now.getTime() - created.getTime();
+            if (diffTime < 0) return '0d'; 
+            
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 7) return `${diffDays}d`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
+            if (diffDays < 365) return `${Math.floor(diffDays / 30)}m`;
+            return `${Math.floor(diffDays / 365)}y`;
+        }
+
+        function parseSmartDates(textStr) {
+            if (!textStr) return textStr;
+            const match = textStr.match(/due:([A-Za-z0-9_]+)/);
+            if (!match) return textStr;
+            
+            const rawValue = match[1].toLowerCase();
+            const targetDate = new Date();
+            targetDate.setHours(0,0,0,0);
+            let valid = false;
+            
+            if (rawValue === 'today') {
+                valid = true;
+            } else if (rawValue === 'tomorrow') {
+                targetDate.setDate(targetDate.getDate() + 1);
+                valid = true;
+            } else if (['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].includes(rawValue)) {
+                const daysOfWeek = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+                const targetDayIndex = daysOfWeek.indexOf(rawValue);
+                const currentDayIndex = targetDate.getDay();
+                let daysToAdd = targetDayIndex - currentDayIndex;
+                if (daysToAdd <= 0) daysToAdd += 7; 
+                targetDate.setDate(targetDate.getDate() + daysToAdd);
+                valid = true;
+            } else if (rawValue.match(/^(\d+)d$/)) {
+                const days = parseInt(rawValue.match(/^(\d+)d$/)[1]);
+                targetDate.setDate(targetDate.getDate() + days);
+                valid = true;
+            } else if (rawValue.match(/^(\d+)w$/)) {
+                const weeks = parseInt(rawValue.match(/^(\d+)w$/)[1]);
+                targetDate.setDate(targetDate.getDate() + (weeks * 7));
+                valid = true;
+            }
+            
+            if (valid) {
+                const dateISOString = targetDate.toISOString().split('T')[0];
+                return textStr.replace(/due:[A-Za-z0-9_]+/, `due:${dateISOString}`);
+            }
+            return textStr;
+        }
+
+        function render() {
+            if (editingBulk) return;
+            const list = document.getElementById('todoList');
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const sortVal = document.getElementById('sortOrder').value;
+            const dir = sortAscending ? 1 : -1;
+            
+            let displayTasks = allTasks.map((text, i) => ({ text, i, meta: getMeta(text) }));
+            
+            if (completedFilterMode === 'active') {
+                displayTasks = displayTasks.filter(t => !t.text.startsWith('x ') || t.meta.isHeader);
+            } else if (completedFilterMode === 'completed') {
+                displayTasks = displayTasks.filter(t => t.text.startsWith('x ') || t.meta.isHeader);
+            }
+            
+            if (!showHeaders) displayTasks = displayTasks.filter(t => !t.meta.isHeader);
+            if (search) displayTasks = displayTasks.filter(t => t.text.toLowerCase().includes(search) || t.meta.isHeader);
+            
+            activeFilters.forEach(f => {
+                if (f === 'OVERDUE') displayTasks = displayTasks.filter(t => t.meta.isOverdue || t.meta.isHeader);
+                else if (f === 'TODAY') displayTasks = displayTasks.filter(t => t.meta.isToday || t.meta.isHeader);
+                else if (f === 'UPCOMING') displayTasks = displayTasks.filter(t => t.meta.isUpcoming || t.meta.isHeader);
+                else if (f === 'NO_DUE') displayTasks = displayTasks.filter(t => (!t.meta.due && !t.meta.isHeader) || t.meta.isHeader);
+                else if (f.startsWith('DATE:')) displayTasks = displayTasks.filter(t => t.meta.due === f.split(':')[1] || t.meta.isHeader);
+                else if (f.startsWith('CREATE:')) displayTasks = displayTasks.filter(t => t.meta.created === f.split(':')[1] || t.meta.isHeader);
+                else if (f.startsWith('PRIO:')) displayTasks = displayTasks.filter(t => t.meta.prio === f.split(':')[1] || t.meta.isHeader);
+                else displayTasks = displayTasks.filter(t => t.text.includes(f) || t.meta.isHeader);
+            });
+
+            if (sortVal === 'prio') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.prio || 'Z').localeCompare(b.meta.prio || 'Z'));
+            else if (sortVal === 'due') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.due || '9999').localeCompare(b.meta.due || '9999'));
+            else if (sortVal === 'created') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.created || '0000').localeCompare(b.meta.created || '0000'));
+            else if (sortVal === 'completed') displayTasks.sort((a, b) => (a.meta.isHeader || b.meta.isHeader) ? 0 : dir * (a.meta.completed || '0000').localeCompare(b.meta.completed || '0000'));
+
+            document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim()).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim()).length}`;
+            
+            list.innerHTML = displayTasks.map(item => {
+                if (!item.text.trim()) return ""; 
+                if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
+                
+                if (editingIndex === item.i) {
+                    return `<div class="p-2 card-bg border-2 border-blue-500 rounded mb-1 flex flex-col gap-2 relative">
+                        <input type="text" id="inlineEditInput" autocomplete="off" oninput="handleInputAutocomplete(this, 'inlineAutocompleteDropdown')" onkeydown="handleInlineEditKeyDown(event, ${item.i})" class="w-full bg-black text-white p-3 rounded outline-none border border-gray-700" value="${item.text}">
+                        <div id="inlineAutocompleteDropdown" class="hidden absolute left-2 right-2 top-[55px] card-bg border rounded-lg shadow-xl max-h-40 overflow-y-auto z-[200] p-1 space-y-0.5"></div>
+                        <div class="flex gap-2">
+                            <button onclick="saveInlineEdit(${item.i})" class="bg-blue-600 flex-1 py-2 rounded font-bold text-xs">SAVE</button>
+                            <button onclick="cancelInlineEdit()" class="bg-gray-800 px-4 py-2 rounded font-bold text-xs uppercase">Cancel</button>
+                        </div>
+                    </div>`;
+                }
+
+                const isDone = item.text.startsWith('x ');
+                const pClass = item.meta.prio === 'A' ? 'prio-a' : item.meta.prio === 'B' ? 'prio-b' : 'prio-none';
+                
+                let cleanDescription = item.text;
+                
+                if (isDone) {
+                    cleanDescription = cleanDescription.replace(/^x\s+(\d{4}-\d{2}-\d{2})\s+/, '').replace(/^x\s+/, '');
+                }
+                
+                cleanDescription = cleanDescription.replace(/\([A-Z]\)\s*/g, '');
+                if (item.meta.created) {
+                    cleanDescription = cleanDescription.replace(new RegExp('^' + item.meta.created + '\\s+'), '');
+                }
+                
+                let projectBadges = (cleanDescription.match(/\+[\w\-]+/g) || []).map(p => `<span class="text-blue-400 font-bold mr-2">${p}</span>`).join('');
+                let contextBadges = (cleanDescription.match(/@[\w\-]+/g) || []).map(c => `<span class="text-green-400 font-bold mr-2">${c}</span>`).join('');
+                
+                cleanDescription = cleanDescription.replace(/\+[\w\-]+/g, '').replace(/@[\w\-]+/g, '').replace(/due:[^\s]+/g, '');
+                cleanDescription = cleanDescription.trim();
+
+                let finalDescriptionHtml = cleanDescription.replace(/link:(?:https?:\/\/)?([^\s]+)/g, (match, url) => `<a href="${url.startsWith('http')?url:'https://'+url}" target="_blank" class="text-blue-500 underline font-bold" onclick="event.stopPropagation()">link ↗</a>`) || '<span class="opacity-30 italic">[No description]</span>';
+
+                let metadataRowHtml = '';
+                let hasSublineContent = item.meta.prio || item.meta.created || projectBadges || contextBadges || item.meta.due;
+                
+                if (hasSublineContent) {
+                    let prioSpan = item.meta.prio ? `<span class="text-orange-400 font-black text-[12px] mr-3 font-mono">${item.meta.prio === 'A' ? '🔥' : item.meta.prio === 'B' ? '⭐' : '📌'} (${item.meta.prio})</span>` : '';
+                    let createdSpan = item.meta.created ? `<span class="text-gray-500 text-[11px] font-medium mr-3">📅 ${item.meta.created}</span>` : '';
+                    let dueSpan = item.meta.due ? `<span class="${item.meta.isOverdue ? 'text-red-500 underline' : (item.meta.isToday ? 'text-yellow-500' : 'text-blue-300')} font-bold text-[11px]">due:${item.meta.due}</span>` : '';
+                    
+                    metadataRowHtml = `<div class="flex flex-wrap items-center mt-1 opacity-80 gap-y-0.5 text-[11px]">
+                        ${prioSpan}
+                        ${createdSpan}
+                        ${projectBadges}
+                        ${contextBadges}
+                        ${dueSpan}
+                    </div>`;
+                }
+
+                let ageBadgeHtml = '';
+                if (!isDone && item.meta.created) {
+                    const ageToken = calculateAgeString(item.meta.created);
+                    if (ageToken) {
+                        ageBadgeHtml = `<span class="ml-2 text-[10px] font-bold text-gray-600 select-none bg-white/5 border border-white/5 px-1.5 py-0.5 rounded">${ageToken}</span>`;
+                    }
+                }
+
+                return `<div class="flex items-center p-3 card-bg border-l-4 ${pClass} ${isDone ? 'opacity-30 italic' : ''} mb-0.5 rounded-r">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${item.i})" class="w-4 h-4 mr-4 accent-blue-500">
+                    <div class="flex-1 leading-tight flex items-center justify-between" onclick="startInlineEdit(${item.i})">
+                        <div class="flex flex-col">
+                            <span class="text-[13px] font-medium tracking-wide text-gray-100">${finalDescriptionHtml}</span>
+                            ${metadataRowHtml}
+                        </div>
+                        ${ageBadgeHtml}
+                    </div>
+                    <button onclick="deleteTask(${item.i})" class="text-gray-600 hover:text-red-500 px-2">✕</button>
+                </div>`;
+            }).join('');
+            updateSidebar();
+        }
+
+        function startInlineEdit(i) { editingIndex = i; render(); setTimeout(() => { const el = document.getElementById('inlineEditInput'); if(el){el.focus(); el.setSelectionRange(el.value.length, el.value.length);} }, 50); }
+        function cancelInlineEdit() { editingIndex = null; render(); }
+        
+        function saveInlineEdit(i) { 
+            let val = document.getElementById('inlineEditInput').value.trim(); 
+            if(val) { 
+                val = parseSmartDates(val); 
+                allTasks[i] = val; 
+                editingIndex = null; 
+                render(); 
+                saveTasks(); 
+            } 
+        }
+
+        function updateSidebar() {
+            const tasksWithMeta = allTasks.map(t => ({ text: t, meta: getMeta(t) }));
+            const dateCats = ['OVERDUE', 'TODAY', 'UPCOMING', 'NO_DUE'];
+            const taskMatches = (task, ignoreFilters = []) => {
+                if (task.text.startsWith('x ') || task.meta.isHeader || !task.text.trim()) return false;
+                return Array.from(activeFilters).every(f => {
+                    if (ignoreFilters.includes(f)) return true;
+                    if (f === 'OVERDUE') return task.meta.isOverdue;
+                    if (f === 'TODAY') return task.meta.isToday;
+                    if (f === 'UPCOMING') return task.meta.isUpcoming;
+                    if (f === 'NO_DUE') return !task.meta.due;
+                    if (f.startsWith('DATE:')) return task.meta.due === f.split(':')[1];
+                    if (f.startsWith('CREATE:')) return task.meta.created === f.split(':')[1];
+                    if (f.startsWith('PRIO:')) return task.meta.prio === f.split(':')[1];
+                    return task.text.includes(f);
+                });
+            };
+            const dateCounts = { OVERDUE: 0, TODAY: 0, UPCOMING: 0, NO_DUE: 0 };
+            tasksWithMeta.forEach(t => { if (taskMatches(t, dateCats)) { if (t.meta.isOverdue) dateCounts.OVERDUE++; else if (t.meta.isToday) dateCounts.TODAY++; else if (t.meta.isUpcoming) dateCounts.UPCOMING++; if (!t.meta.due) dateCounts.NO_DUE++; } });
+            document.getElementById('dateList').innerHTML = [{ label: 'Overdue', key: 'OVERDUE', color: 'text-red-500' }, { label: 'Today', key: 'TODAY', color: 'text-yellow-500' }, { label: 'Upcoming', key: 'UPCOMING', color: 'text-blue-300' }, { label: 'No Due Date', key: 'NO_DUE', color: 'text-blue-500' }].map(c => `<div onclick="toggleFilter('${c.key}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(c.key) ? 'bg-blue-600/30 font-bold' : c.color} font-bold hover:bg-white/5"><span>${c.label}</span><span class="opacity-60 font-black">${dateCounts[c.key]}</span></div>`).join('');
+            
+            const specificDateMap = {};
+            tasksWithMeta.forEach(t => { if (t.meta.due) { const key = `DATE:${t.meta.due}`; if (taskMatches(t, [key])) specificDateMap[t.meta.due] = (specificDateMap[t.meta.due] || 0) + 1; } });
+            document.getElementById('specificDateList').innerHTML = Object.entries(specificDateMap).sort().map(([d, count]) => `<div onclick="toggleFilter('DATE:${d}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has('DATE:'+d) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`).join('');
+
+            const createdDateMap = {};
+            tasksWithMeta.forEach(t => { if (t.meta.created) { const key = `CREATE:${t.meta.created}`; if (taskMatches(t, [key])) createdDateMap[t.meta.created] = (createdDateMap[t.meta.created] || 0) + 1; } });
+            document.getElementById('createdDateList').innerHTML = Object.entries(createdDateMap).sort((a, b) => b[0].localeCompare(a[0])).map(([d, count]) => `<div onclick="toggleFilter('CREATE:${d}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has('CREATE:'+d) ? 'font-bold bg-blue-600/30 text-blue-400' : 'text-gray-400'} hover:bg-white/5"><span>${d}</span><span class="opacity-40">${count}</span></div>`).join('') || '<div class="opacity-30 italic text-[10px] p-2">None</div>';
+
+            const updateTags = (id, type, regex, color) => {
+                const tagMap = {};
+                tasksWithMeta.forEach(t => { 
+                    const tags = type === 'PRIO' ? (t.meta.prio ? [`PRIO:${t.meta.prio}`] : []) : (t.text.match(regex) || []);
+                    tags.forEach(tag => { if (taskMatches(t, [tag])) tagMap[tag] = (tagMap[tag] || 0) + 1; });
+                });
+                document.getElementById(id).innerHTML = Object.entries(tagMap).sort().map(([tag, count]) => `<div onclick="toggleFilter('${tag}')" class="flex justify-between p-2 rounded cursor-pointer ${activeFilters.has(tag) ? 'font-bold bg-blue-600/30' : color} hover:bg-white/5"><span>${tag.replace('PRIO:','(PRIO ').replace(/$/, type==='PRIO'?')':'')}</span><span class="opacity-40">${count}</span></div>`).join('') || '<div class="opacity-30 italic text-[10px] p-2">None</div>';
+            };
+            updateTags('priorityFilterList', 'PRIO', null, 'text-orange-400');
+            updateTags('projectList', 'PROJ', /\+[\w\-]+/g, 'text-blue-400');
+            updateTags('contextList', 'CTX', /@[\w\-]+/g, 'text-green-400');
+        }
+
+        function getMeta(t) {
+            if (!t) return { isHeader: false };
+            const d = t.match(/due:(\d{4}-\d{2}-\d{2})/);
+            const today = new Date(); today.setHours(0,0,0,0);
+            const taskD = d ? new Date(d[1] + 'T00:00:00') : null;
+            
+            const createMatch = t.match(/^(?:\([A-Z]\)\s+)?(\d{4}-\d{2}-\d{2})/);
+            const createdDate = createMatch ? createMatch[1] : null;
+
+            const compMatch = t.match(/^x\s+(\d{4}-\d{2}-\d{2})/);
+            const completedDate = compMatch ? compMatch[1] : null;
+
+            const embeddedPrioMatch = t.match(/\(([A-Z])\)/);
+
+            return { 
+                isHeader: t.startsWith('#'), 
+                prio: embeddedPrioMatch ? embeddedPrioMatch[1] : null, 
+                due: d ? d[1] : null, 
+                isOverdue: !t.startsWith('x ') && taskD && taskD < today, 
+                isToday: !t.startsWith('x ') && taskD && taskD.getTime() === today.getTime(), 
+                isUpcoming: !t.startsWith('x ') && taskD && taskD > today,
+                created: createdDate,
+                completed: completedDate
+            };
+        }
+
+        function toggleFilter(f) { activeFilters.has(f) ? activeFilters.delete(f) : activeFilters.add(f); render(); }
+        function resetFilters() { activeFilters.clear(); document.getElementById('searchInput').value = ""; render(); }
+        function toggleTask(i) { allTasks[i] = allTasks[i].startsWith('x ') ? allTasks[i].replace(/^x \d{4}-\d{2}-\d{2} /, '') : `x ${new Date().toISOString().split('T')[0]} ${allTasks[i]}`; render(); saveTasks(); }
+        function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
+        
+        function addTask() { 
+            const inp = document.getElementById('newTodo'); 
+            if (!inp.value.trim()) return; 
+            let val = inp.value.trim(); 
+            
+            val = parseSmartDates(val);
+            if (!val.startsWith('#') && !val.match(/^\([A-Z]\)/)) {
+                val = new Date().toISOString().split('T')[0] + " " + val; 
+            }
+            
+            if (addToTop) {
+                allTasks.unshift(val, ""); // ADDED: Blank line at creation
+            } else {
+                allTasks.push("", val);    // ADDED: Blank line at creation
+            }
+            
+            (val.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+            (val.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+
+            inp.value = ""; 
+            hideAutocomplete('autocompleteDropdown');
+            render(); 
+            saveTasks(); 
+        }
+
+        function handleInputAutocomplete(inputEl, targetDropdownId) {
+            const val = inputEl.value;
+            const selectionEnd = inputEl.selectionEnd;
+            
+            const textBeforeCaret = val.substring(0, selectionEnd);
+            const currentWordMatch = textBeforeCaret.match(/([\+@][\w\-]*)$/);
+            
+            if (!currentWordMatch) {
+                hideAutocomplete(targetDropdownId);
+                return;
+            }
+            
+            const currentTag = currentWordMatch[1];
+            const prefix = currentTag[0]; 
+            const searchStr = currentTag.toLowerCase();
+            
+            let sourcePool = prefix === '+' ? Array.from(existingProjects) : Array.from(existingContexts);
+            let matches = sourcePool.filter(tag => tag.toLowerCase().startsWith(searchStr) && tag.toLowerCase() !== searchStr);
+            
+            if (matches.length === 0) {
+                hideAutocomplete(targetDropdownId);
+                return;
+            }
+            
+            const dropdown = document.getElementById(targetDropdownId);
+            dropdown.innerHTML = matches.map((match, idx) => {
+                const colorClass = prefix === '+' ? 'text-blue-400' : 'text-green-400';
+                return `<div onclick="selectAutocomplete('${match}', '${inputEl.id}', '${targetDropdownId}')" class="p-2 text-xs font-mono font-bold cursor-pointer hover:bg-white/5 rounded ${colorClass} transition-all ${idx === 0 ? 'bg-white/5' : ''}" data-value="${match}">
+                    ${match} <span class="text-gray-600 text-[10px] float-right uppercase font-sans tracking-widest pt-0.5">Tab ⇥</span>
+                </div>`;
+            }).join('');
+            
+            dropdown.classList.remove('hidden');
+        }
+
+        function selectAutocomplete(chosenTag, inputElementId, dropdownElementId) {
+            const inputEl = document.getElementById(inputElementId);
+            const val = inputEl.value;
+            const selectionEnd = inputEl.selectionEnd;
+            
+            const textBeforeCaret = val.substring(0, selectionEnd);
+            const textAfterCaret = val.substring(selectionEnd);
+            
+            const updatedBeforeCaret = textBeforeCaret.replace(/([\+@][\w\-]*)$/, chosenTag + ' ');
+            
+            inputEl.value = updatedBeforeCaret + textAfterCaret;
+            inputEl.focus();
+            
+            const newCaretPos = updatedBeforeCaret.length;
+            inputEl.setSelectionRange(newCaretPos, newCaretPos);
+            
+            hideAutocomplete(dropdownElementId);
+        }
+
+        function hideAutocomplete(dropdownElementId) {
+            const dropdown = document.getElementById(dropdownElementId);
+            if (dropdown) dropdown.classList.add('hidden');
+        }
+
+        function handleInputKeyDown(e) { 
+            if (e.key === 'Enter') {
+                addTask(); 
+            } else if (e.key === 'Tab') {
+                const dropdown = document.getElementById('autocompleteDropdown');
+                if (!dropdown.classList.contains('hidden')) {
+                    e.preventDefault();
+                    const firstMatch = dropdown.querySelector('[data-value]');
+                    if (firstMatch) {
+                        selectAutocomplete(firstMatch.getAttribute('data-value'), 'newTodo', 'autocompleteDropdown');
+                    }
+                }
+            }
+        }
+
+        function handleInlineEditKeyDown(e, taskIndex) {
+            if (e.key === 'Enter') {
+                saveInlineEdit(taskIndex);
+            } else if (e.key === 'Escape') {
+                cancelInlineEdit();
+            } else if (e.key === 'Tab') {
+                const dropdown = document.getElementById('inlineAutocompleteDropdown');
+                if (!dropdown.classList.contains('hidden')) {
+                    e.preventDefault();
+                    const firstMatch = dropdown.querySelector('[data-value]');
+                    if (firstMatch) {
+                        selectAutocomplete(firstMatch.getAttribute('data-value'), 'inlineEditInput', 'inlineAutocompleteDropdown');
+                    }
+                }
+            }
+        }
+
+        function sweepCompletedToBottom() {
+            if (allTasks.length === 0) return;
+            
+            const activeAndBlankLines = [];
+            const completedLines = [];
+            
+            allTasks.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('x ')) {
+                    activeAndBlankLines.push(line);
+                } else {
+                    completedLines.push(line);
+                }
+            });
+            
+            allTasks = [...activeAndBlankLines, ...completedLines];
+            
+            render();
+            saveTasks();
+        }
+
+        function cycleCompletedFilter() {
+            if (completedFilterMode === 'all') {
+                completedFilterMode = 'active';
+            } else if (completedFilterMode === 'active') {
+                completedFilterMode = 'completed';
+            } else {
+                completedFilterMode = 'all';
+            }
+            localStorage.setItem('completed_filter_mode', completedFilterMode);
+            updateCompletedFilterButtonUI();
+            render();
+        }
+
+        function updateCompletedFilterButtonUI() {
+            const btn = document.getElementById('toggleCompBtn');
+            if (completedFilterMode === 'all') {
+                btn.innerText = "Completed: Show All";
+                btn.className = "btn-toggle active";
+            } else if (completedFilterMode === 'active') {
+                btn.innerText = "Completed: Hidden";
+                btn.className = "btn-toggle";
+            } else if (completedFilterMode === 'completed') {
+                btn.innerText = "Completed: Only";
+                btn.className = "btn-toggle active bg-green-600 border-green-600 hover:bg-green-700";
+            }
+        }
+
+        function toggleHeaders() { showHeaders = !showHeaders; document.getElementById('toggleHeadBtn').classList.toggle('active'); render(); }
+        
+        function toggleAddToTop() {
+            addToTop = !addToTop;
+            localStorage.setItem('add_to_top', addToTop);
+            document.getElementById('toggleTopBtn').classList.toggle('active', addToTop);
+        }
+
+        function toggleBulkEdit() { editingBulk = !editingBulk; document.getElementById('todoList').classList.toggle('hidden', editingBulk); document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk); if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n'); else render(); }
+        function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n'); toggleBulkEdit(); saveTasks(); }
+        
+        function exportFile() {
+            const blob = new Blob([allTasks.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `todo_backup_${new Date().toISOString().split('T')[0]}.txt`;
+            a.click(); URL.revokeObjectURL(url);
+        }
+
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
+        function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
+        
+        function handleAuth() { 
+            window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`; 
+        }
+
+        function updateFileUI() { 
+            const list = document.getElementById('fileList'); 
+            const cleanName = currentFile === '/todo.txt' ? 'todo.txt' : currentFile.replace('/todo_', '').replace('.txt', '');
+            document.getElementById('activeFileNameDisplay').innerText = cleanName; 
+            list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted hover:bg-white/5'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
+        }
+        async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; updateFileUI(); await loadTasks(); if(document.getElementById('sidebar').classList.contains('sidebar-open')) toggleSidebar(); }
+        function showFileManager() { document.getElementById('fileManagerOverlay').classList.remove('hidden'); renderBulkList(); }
+        function hideFileManager() { document.getElementById('fileManagerOverlay').classList.add('hidden'); }
+        function renderBulkList() {
+            const list = document.getElementById('bulkFileList');
+            list.innerHTML = knownFiles.map(f => `<div class="flex items-center justify-between p-4 card-bg border rounded-lg"><span class="font-black text-sm uppercase">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</span>${f !== '/todo.txt' ? `<button onclick="removeFileBulk('${f}')" class="text-red-500 text-xs font-bold uppercase tracking-widest border border-red-500/30 px-3 py-1 rounded">Remove</button>` : '<span class="text-[9px] opacity-30 uppercase font-black">Default Base</span>'}</div>`).join('');
+        }
+        function removeFileBulk(path) { if (confirm(`Remove "${path}"?`)) { knownFiles = knownFiles.filter(f => f !== path); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); if (currentFile === path) switchFile('/todo.txt'); renderBulkList(); updateFileUI(); } }
+        function addProjectFromBulk() {
+            const input = document.getElementById('bulkFileName');
+            const rawName = input.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '');
+            if (!rawName) return;
+            const fullPath = `/todo_${rawName}.txt`;
+            if (!knownFiles.includes(fullPath)) { knownFiles.push(fullPath); localStorage.setItem('todo_file_registry', JSON.stringify(knownFiles)); renderBulkList(); updateFileUI(); }
+            input.value = "";
+        }
+        async function hardLogout() {
+            if (pollInterval) clearInterval(pollInterval);
+            try { await idbSet('dir', null); } catch (e) { /* ignore */ }
+            localStorage.clear();
+            location.reload();
+        }
+        init();
     </script>
 </body>
 </html>
