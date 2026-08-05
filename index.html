@@ -196,6 +196,21 @@
                                     <p class="text-[9px] opacity-40 leading-tight">Posts JSON to any URL — n8n, Zapier, Make, EmailJS, Discord, etc. Point it at something that can send you an email.</p>
                                 </div>
                             </div>
+                            <div class="border-t border-white/5 pt-3">
+                                <div class="text-[9px] font-black text-gray-500 uppercase mb-2">Email Digest (Manual)</div>
+                                <input type="email" id="emailRecipient" placeholder="you@example.com" class="w-full input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500 mb-2">
+                                <div class="flex flex-wrap gap-1 mb-2">
+                                    <button onclick="toggleEmailInclude('overdue')" id="emailOverdueBtn" class="btn-toggle">Overdue</button>
+                                    <button onclick="toggleEmailInclude('dueToday')" id="emailTodayBtn" class="btn-toggle">Due Today</button>
+                                    <button onclick="toggleEmailInclude('dueTomorrow')" id="emailTomorrowBtn" class="btn-toggle">Due Tomorrow</button>
+                                    <button onclick="toggleEmailInclude('noDueDate')" id="emailNoDateBtn" class="btn-toggle">No Due Date</button>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="generateEmailDigest()" class="bg-blue-600 flex-1 py-2 rounded font-bold text-[10px] uppercase text-white">Generate Email</button>
+                                    <button onclick="copyEmailDigest()" class="btn-toggle flex-1">Copy Text</button>
+                                </div>
+                                <p class="text-[9px] opacity-40 leading-tight mt-1">Opens your default mail app pre-filled with a digest of matching tasks. Nothing sends automatically — you review and hit send yourself. "Copy Text" is a fallback if your device has no default mail app configured.</p>
+                            </div>
                             <div class="flex gap-2 pt-1">
                                 <button onclick="saveNotifyConfig()" class="bg-blue-600 flex-1 py-2 rounded font-bold text-[10px] uppercase text-white">Save</button>
                                 <button onclick="testNotification()" class="btn-toggle flex-1">Send Test</button>
@@ -258,7 +273,8 @@
             enabled: false,
             triggers: { overdue: true, dueToday: true, dueTomorrow: false },
             ntfy: { enabled: false, server: 'https://ntfy.sh', topic: '' },
-            webhook: { enabled: false, url: '' }
+            webhook: { enabled: false, url: '' },
+            email: { recipient: '', include: { overdue: true, dueToday: true, dueTomorrow: false, noDueDate: false } }
         };
         let notifiedTasks = new Set(JSON.parse(localStorage.getItem('notified_tasks') || '[]'));
 
@@ -1206,7 +1222,11 @@
                         enabled: !!parsed.enabled,
                         triggers: { overdue: true, dueToday: true, dueTomorrow: false, ...(parsed.triggers || {}) },
                         ntfy: { enabled: false, server: 'https://ntfy.sh', topic: '', ...(parsed.ntfy || {}) },
-                        webhook: { enabled: false, url: '', ...(parsed.webhook || {}) }
+                        webhook: { enabled: false, url: '', ...(parsed.webhook || {}) },
+                        email: {
+                            recipient: (parsed.email || {}).recipient || '',
+                            include: { overdue: true, dueToday: true, dueTomorrow: false, noDueDate: false, ...((parsed.email || {}).include || {}) }
+                        }
                     };
                 }
             } catch (e) {
@@ -1263,18 +1283,26 @@
             webhookBtn.classList.toggle('active', notifyConfig.webhook.enabled);
             document.getElementById('webhookFields').classList.toggle('hidden', !notifyConfig.webhook.enabled);
             document.getElementById('webhookUrl').value = notifyConfig.webhook.url || '';
+
+            document.getElementById('emailRecipient').value = notifyConfig.email.recipient || '';
+            document.getElementById('emailOverdueBtn').classList.toggle('active', notifyConfig.email.include.overdue);
+            document.getElementById('emailTodayBtn').classList.toggle('active', notifyConfig.email.include.dueToday);
+            document.getElementById('emailTomorrowBtn').classList.toggle('active', notifyConfig.email.include.dueTomorrow);
+            document.getElementById('emailNoDateBtn').classList.toggle('active', notifyConfig.email.include.noDueDate);
         }
 
         function gatherNotifyConfigFromUI() {
             notifyConfig.ntfy.server = document.getElementById('ntfyServer').value.trim() || 'https://ntfy.sh';
             notifyConfig.ntfy.topic = document.getElementById('ntfyTopic').value.trim();
             notifyConfig.webhook.url = document.getElementById('webhookUrl').value.trim();
+            notifyConfig.email.recipient = document.getElementById('emailRecipient').value.trim();
         }
 
         function toggleNotifyEnabled() { notifyConfig.enabled = !notifyConfig.enabled; applyNotifyConfigToUI(); }
         function toggleNtfyEnabled() { notifyConfig.ntfy.enabled = !notifyConfig.ntfy.enabled; applyNotifyConfigToUI(); }
         function toggleWebhookEnabled() { notifyConfig.webhook.enabled = !notifyConfig.webhook.enabled; applyNotifyConfigToUI(); }
         function toggleNotifyTrigger(key) { notifyConfig.triggers[key] = !notifyConfig.triggers[key]; applyNotifyConfigToUI(); }
+        function toggleEmailInclude(key) { notifyConfig.email.include[key] = !notifyConfig.email.include[key]; applyNotifyConfigToUI(); }
 
         function generateNtfyTopic() {
             const topic = 'todotxt-' + Math.random().toString(36).slice(2, 10);
@@ -1358,6 +1386,85 @@
                 });
             } catch (e) {
                 console.error('Webhook send failed:', e);
+            }
+        }
+
+        // --- Email Digest (manual, mailto-based) ---
+        // Deliberately NOT automatic: opens a pre-filled draft in the person's own
+        // mail client so they review before anything sends. No SMTP, no stored
+        // credentials, no third-party mail service required.
+
+        function buildEmailDigest() {
+            gatherNotifyConfigFromUI();
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            const inc = notifyConfig.email.include;
+            const groups = { overdue: [], dueToday: [], dueTomorrow: [], noDueDate: [] };
+
+            allTasks.forEach(t => {
+                if (!t || !t.trim() || t.startsWith('x ') || t.startsWith('#')) return;
+                const meta = getMeta(t);
+                const clean = t.replace(/^\([A-Z]\)\s*/, '').trim();
+                if (meta.due) {
+                    if (meta.isOverdue && inc.overdue) groups.overdue.push(clean);
+                    else if (meta.isToday && inc.dueToday) groups.dueToday.push(clean);
+                    else if (meta.due === tomorrowStr && inc.dueTomorrow) groups.dueTomorrow.push(clean);
+                } else if (inc.noDueDate) {
+                    groups.noDueDate.push(clean);
+                }
+            });
+
+            const sections = [
+                ['\u26A0 OVERDUE', groups.overdue],
+                ['\uD83D\uDCC5 DUE TODAY', groups.dueToday],
+                ['\uD83D\uDD1C DUE TOMORROW', groups.dueTomorrow],
+                ['\uD83D\uDCCB NO DUE DATE', groups.noDueDate]
+            ].filter(([, list]) => list.length > 0);
+
+            const dateStr = today.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            let body = `to-do-txt Digest \u2014 ${dateStr}\r\n`;
+
+            if (sections.length === 0) {
+                body += `\r\nNothing matching your selected categories. Nice work!\r\n`;
+            } else {
+                const MAX_PER_SECTION = 10;
+                sections.forEach(([label, list]) => {
+                    body += `\r\n${label} (${list.length})\r\n`;
+                    list.slice(0, MAX_PER_SECTION).forEach(line => { body += `  - ${line}\r\n`; });
+                    if (list.length > MAX_PER_SECTION) body += `  ...and ${list.length - MAX_PER_SECTION} more\r\n`;
+                });
+            }
+            body += `\r\n\u2014\r\nSent from to-do-txt${currentFile ? ' (' + currentFile + ')' : ''}`;
+
+            // mailto: has real-world length limits in some browsers/OSes — keep it safe.
+            if (body.length > 1800) body = body.slice(0, 1800) + `\r\n\r\n... (truncated \u2014 open the app for the full list)`;
+
+            const subjectParts = [];
+            if (groups.overdue.length) subjectParts.push(`${groups.overdue.length} overdue`);
+            if (groups.dueToday.length) subjectParts.push(`${groups.dueToday.length} due today`);
+            const subject = subjectParts.length ? `to-do-txt: ${subjectParts.join(', ')}` : `to-do-txt digest`;
+
+            return { subject, body };
+        }
+
+        function generateEmailDigest() {
+            const recipient = document.getElementById('emailRecipient').value.trim();
+            const { subject, body } = buildEmailDigest();
+            const mailto = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.location.href = mailto;
+            setStatus('Email digest opened');
+        }
+
+        async function copyEmailDigest() {
+            const recipient = document.getElementById('emailRecipient').value.trim();
+            const { subject, body } = buildEmailDigest();
+            const text = `To: ${recipient || '(not set)'}\r\nSubject: ${subject}\r\n\r\n${body}`;
+            try {
+                await navigator.clipboard.writeText(text);
+                setStatus('Digest copied to clipboard');
+            } catch (e) {
+                prompt('Copy this text manually (clipboard access was blocked):', text);
             }
         }
 

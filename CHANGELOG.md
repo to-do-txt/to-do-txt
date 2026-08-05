@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format loosely follows 
 
 ### Added
 - Optional **Notifications** (off by default): get pinged via [ntfy](https://ntfy.sh) or a custom webhook when a task is overdue, due today, or due tomorrow.
+- **Email Digest** (manual): a "Generate Email" button builds a formatted plain-text digest of matching tasks and opens it as a pre-filled draft in your default mail app via `mailto:`. Nothing sends automatically. "Copy Text" fallback for devices without a configured mail app.
 - Notification settings sync as `.notify.json` alongside task files, using whichever sync backend (Dropbox or Local Folder) is already active.
 - "Send Test" button to verify a ntfy topic or webhook URL before relying on it.
 - Random topic-name generator (🎲) for ntfy, so no signup or pre-existing account is needed.
