@@ -18,6 +18,7 @@ A minimalist, privacy-focused Task Manager built entirely around the standard [t
 * **Structural Spacing "Sweep":** Reorganize files cleanly with a single click using **"Sweep Done"**. This engine groups completed (`x `) lines together and drops them at the bottom of the file, cleanly anchoring empty line splits and headers right where you left them.
 * **Full Sync & Offline Ready:** Instantly saves to Dropbox or your local folder with granular syncing state cues. Installable as an offline-compatible app on iOS, Android, or Desktop.
 * **Raw Editor:** Quick access to bulk-edit or parse your entire plain text stream manually.
+* **Notifications (Optional):** Get pinged via [ntfy](https://ntfy.sh) or a webhook of your choice when a task is overdue, due today, or due tomorrow. Off by default — see [Notifications](#-notifications) below.
 
 ## 🚀 Getting Started
 
@@ -39,6 +40,7 @@ This app is **completely serverless**. It executes in memory in your local brows
 * **Local Folder mode:** Interfaces via the browser's [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API), reading and writing `todo*.txt` files directly in a folder you select — nothing ever leaves your device.
 * **Privacy First:** Zero data telemetry or intermediate servers, in either mode. Your credentials, project layouts, and text streams remain strictly between your browser runtime and the backend you chose.
 * **Format:** Strict adherence to the standard [todo.txt format spec](https://github.com/todotxt/todo.txt) ensures seamless portability with third-party text streams.
+* **Notification settings:** If enabled, stored as a single `.notify.json` file alongside your `todo*.txt` files, using the same backend and same privacy model — no separate server, no third-party account required beyond whatever ntfy topic or webhook URL you choose to use.
 
 ## 💻 Local Folder Sync
 
@@ -49,6 +51,16 @@ An alternative to Dropbox for anyone who'd rather keep tasks fully on-device (or
 * **Permissions:** The browser remembers the folder you granted access to, but for security reasons it may need you to tap **Reconnect Folder** after a browser restart to re-confirm write access. This is a browser-level restriction, not a bug.
 * **No live file-watching:** Like Dropbox mode, the app polls every 30 seconds rather than reacting instantly to external changes. If you edit the file directly in a text editor while the app is open, give it a moment to catch up.
 * **Disconnecting:** Use **Disconnect Folder** in the sidebar to forget the folder and fall back to choosing a sync method again.
+
+## 🔔 Notifications
+
+Optional and off by default. Get pinged when a task is overdue, due today, or due tomorrow — no account or server of ours required.
+
+* **ntfy:** Point at the free, no-signup [ntfy.sh](https://ntfy.sh) service (or your own self-hosted ntfy instance) with a topic name of your choosing. Use the 🎲 button in the Notifications sidebar section to generate a random, hard-to-guess topic, then subscribe to it in the [ntfy app](https://ntfy.sh/app) (iOS/Android) or a browser tab at `https://ntfy.sh/<your-topic>`.
+* **Webhook:** Posts a JSON payload (`title`, `message`, `task`, `trigger`, `file`, `timestamp`) to any URL you provide — wire it into n8n, Zapier, Make, EmailJS, Discord, or anything else that can turn a webhook into an email or push notification.
+* **Where it lives:** Settings sync as `.notify.json` alongside your task files via whichever backend (Dropbox or Local Folder) you've already connected. Nothing is sent anywhere until you enable it and hit **Save**.
+* **When it checks:** Notification triggers are evaluated on the same 30-second poll used for task sync — no separate background process. Each task+trigger+date only fires once; the app forgets it automatically once the task is completed, deleted, or no longer matches.
+* **Test first:** Use the **Send Test** button in the sidebar to confirm your ntfy topic or webhook URL is working before relying on it.
 
 ---
 

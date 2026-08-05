@@ -12,7 +12,7 @@
     })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.2.0</title>
+    <title>to-do-txt v4.3.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -164,11 +164,49 @@
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Created Dates <span class="toggle-icon"></span></summary><div id="createdDateList" class="space-y-1 text-xs pt-2"></div></details>
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Priorities <span class="toggle-icon"></span></summary><div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div></details>
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Projects <span class="toggle-icon"></span></summary><div id="projectList" class="space-y-1 text-xs pt-2"></div></details>
-                <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
+                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
+                <details class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Notifications <span class="toggle-icon"></span></summary>
+                    <div class="space-y-3 text-xs pt-2">
+                        <p class="text-[9px] opacity-40 leading-tight">Optional. Get pinged when a task is overdue or due — via <a href="https://ntfy.sh" target="_blank" class="underline hover:text-blue-400">ntfy</a> (no signup needed) and/or a webhook of your choice. Settings sync as <code>.notify.json</code> alongside your task files.</p>
+                        <button onclick="toggleNotifyEnabled()" id="notifyEnabledBtn" class="btn-toggle w-full">Notifications: Off</button>
+                        <div id="notifySettingsBody" class="hidden space-y-3">
+                            <div>
+                                <div class="text-[9px] font-black text-gray-500 uppercase mb-1">Notify me when a task is</div>
+                                <div class="flex flex-wrap gap-1">
+                                    <button onclick="toggleNotifyTrigger('overdue')" id="trigOverdueBtn" class="btn-toggle">Overdue</button>
+                                    <button onclick="toggleNotifyTrigger('dueToday')" id="trigTodayBtn" class="btn-toggle">Due Today</button>
+                                    <button onclick="toggleNotifyTrigger('dueTomorrow')" id="trigTomorrowBtn" class="btn-toggle">Due Tomorrow</button>
+                                </div>
+                            </div>
+                            <div class="border-t border-white/5 pt-3">
+                                <button onclick="toggleNtfyEnabled()" id="ntfyEnabledBtn" class="btn-toggle w-full mb-2">ntfy: Off</button>
+                                <div id="ntfyFields" class="hidden space-y-1">
+                                    <input type="text" id="ntfyServer" placeholder="https://ntfy.sh" class="w-full input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500">
+                                    <div class="flex gap-1">
+                                        <input type="text" id="ntfyTopic" placeholder="pick a unique topic name" class="flex-1 input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500">
+                                        <button onclick="generateNtfyTopic()" class="btn-toggle" title="Generate a random topic name">🎲</button>
+                                    </div>
+                                    <p class="text-[9px] opacity-40 leading-tight">Subscribe to this topic in the ntfy app (iOS/Android) or at ntfy.sh/&lt;topic&gt; in a browser to receive alerts.</p>
+                                </div>
+                            </div>
+                            <div class="border-t border-white/5 pt-3">
+                                <button onclick="toggleWebhookEnabled()" id="webhookEnabledBtn" class="btn-toggle w-full mb-2">Webhook: Off</button>
+                                <div id="webhookFields" class="hidden space-y-1">
+                                    <input type="text" id="webhookUrl" placeholder="https://your-automation-url" class="w-full input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500">
+                                    <p class="text-[9px] opacity-40 leading-tight">Posts JSON to any URL — n8n, Zapier, Make, EmailJS, Discord, etc. Point it at something that can send you an email.</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 pt-1">
+                                <button onclick="saveNotifyConfig()" class="bg-blue-600 flex-1 py-2 rounded font-bold text-[10px] uppercase text-white">Save</button>
+                                <button onclick="testNotification()" class="btn-toggle flex-1">Send Test</button>
+                            </div>
+                        </div>
+                    </div>
+                </details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.2.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.3.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -212,6 +250,17 @@
         let knownFiles = JSON.parse(localStorage.getItem('todo_file_registry')) || ['/todo.txt'];
         
         let existingProjects = new Set(), existingContexts = new Set();
+
+        // --- Notifications (ntfy / webhook) ---
+        // Off by default, config synced as .notify.json alongside task files.
+        // Fully additive: nothing here runs unless the person opts in.
+        let notifyConfig = {
+            enabled: false,
+            triggers: { overdue: true, dueToday: true, dueTomorrow: false },
+            ntfy: { enabled: false, server: 'https://ntfy.sh', topic: '' },
+            webhook: { enabled: false, url: '' }
+        };
+        let notifiedTasks = new Set(JSON.parse(localStorage.getItem('notified_tasks') || '[]'));
 
         // --- Light/Dark theme ---
         // The head script already applied the stored/system preference as a class on <html>
@@ -263,6 +312,7 @@
                 if (restored) {
                     await loadTasks();
                     updateFileUI();
+                    await loadNotifyConfig();
                     startPolling();
                 }
                 return; // skip Dropbox auth entirely while in local mode
@@ -280,6 +330,7 @@
                 await scanDropboxFiles();
                 await loadTasks(); 
                 updateFileUI(); 
+                await loadNotifyConfig();
                 startPolling();
             } else { 
                 handleAuth(); 
@@ -350,6 +401,7 @@
                         await scanLocalFiles();
                         await loadTasks();
                         updateFileUI();
+                        await loadNotifyConfig();
                         startPolling();
                     }
                 } else {
@@ -362,6 +414,7 @@
                     await scanDropboxFiles();
                     await loadTasks();
                     updateFileUI();
+                    await loadNotifyConfig();
                     startPolling();
                 } else {
                     handleAuth();
@@ -483,6 +536,7 @@
                 await scanLocalFiles();
                 updateFileUI();
                 await loadTasks();
+                await loadNotifyConfig();
                 updateSyncModeUI();
                 startPolling();
             } catch (e) {
@@ -534,6 +588,7 @@
 
                 render();
                 setStatus(`Loaded ${new Date().toLocaleTimeString([], {hour12:false})}`);
+                checkNotificationTriggers();
             } catch (e) {
                 console.error('Local read error:', e);
                 if (e.name === 'NotAllowedError') {
@@ -618,6 +673,7 @@
 
                 render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
+                checkNotificationTriggers();
             } catch (e) { 
                 if (e.status === 401 || e.status === 400) {
                     handleAuthRecovery();
@@ -1125,6 +1181,196 @@
             localStorage.clear();
             location.reload();
         }
+        // =====================================================================
+        // NOTIFICATIONS (ntfy / webhook) — fully optional, off by default
+        // =====================================================================
+
+        // --- Config persistence: .notify.json lives next to the todo*.txt files ---
+        // Uses the same backend the person already picked for tasks. Load never
+        // writes anything; save only touches this one file, never task files.
+
+        async function loadNotifyConfig() {
+            try {
+                let text = null;
+                if (syncMode === 'local' && localDirHandle) {
+                    const fh = await localDirHandle.getFileHandle('.notify.json', { create: false });
+                    const f = await fh.getFile();
+                    text = await f.text();
+                } else if (syncMode === 'dropbox' && dbx) {
+                    const res = await dbx.filesDownload({ path: '/.notify.json' });
+                    text = await res.result.fileBlob.text();
+                }
+                if (text && text.trim()) {
+                    const parsed = JSON.parse(text);
+                    notifyConfig = {
+                        enabled: !!parsed.enabled,
+                        triggers: { overdue: true, dueToday: true, dueTomorrow: false, ...(parsed.triggers || {}) },
+                        ntfy: { enabled: false, server: 'https://ntfy.sh', topic: '', ...(parsed.ntfy || {}) },
+                        webhook: { enabled: false, url: '', ...(parsed.webhook || {}) }
+                    };
+                }
+            } catch (e) {
+                // No config file yet, or it's unreadable — defaults (off) stand.
+            }
+            applyNotifyConfigToUI();
+        }
+
+        async function saveNotifyConfig() {
+            gatherNotifyConfigFromUI();
+            const text = JSON.stringify(notifyConfig, null, 2);
+            try {
+                if (syncMode === 'local' && localDirHandle) {
+                    const fh = await localDirHandle.getFileHandle('.notify.json', { create: true });
+                    const writable = await fh.createWritable();
+                    await writable.write(text);
+                    await writable.close();
+                } else if (syncMode === 'dropbox' && dbx) {
+                    await dbx.filesUpload({ path: '/.notify.json', contents: text, mode: { '.tag': 'overwrite' } });
+                } else {
+                    alert('Connect a sync backend first (Dropbox or Local Folder) so notification settings have somewhere to save.');
+                    return;
+                }
+                setStatus('Notify settings saved');
+                checkNotificationTriggers();
+            } catch (e) {
+                console.error('Save notify config failed:', e);
+                alert('Could not save notification settings: ' + e.message);
+            }
+        }
+
+        // --- UI wiring ---
+
+        function applyNotifyConfigToUI() {
+            const enabledBtn = document.getElementById('notifyEnabledBtn');
+            const body = document.getElementById('notifySettingsBody');
+            enabledBtn.innerText = `Notifications: ${notifyConfig.enabled ? 'On' : 'Off'}`;
+            enabledBtn.classList.toggle('active', notifyConfig.enabled);
+            body.classList.toggle('hidden', !notifyConfig.enabled);
+
+            document.getElementById('trigOverdueBtn').classList.toggle('active', notifyConfig.triggers.overdue);
+            document.getElementById('trigTodayBtn').classList.toggle('active', notifyConfig.triggers.dueToday);
+            document.getElementById('trigTomorrowBtn').classList.toggle('active', notifyConfig.triggers.dueTomorrow);
+
+            const ntfyBtn = document.getElementById('ntfyEnabledBtn');
+            ntfyBtn.innerText = `ntfy: ${notifyConfig.ntfy.enabled ? 'On' : 'Off'}`;
+            ntfyBtn.classList.toggle('active', notifyConfig.ntfy.enabled);
+            document.getElementById('ntfyFields').classList.toggle('hidden', !notifyConfig.ntfy.enabled);
+            document.getElementById('ntfyServer').value = notifyConfig.ntfy.server || 'https://ntfy.sh';
+            document.getElementById('ntfyTopic').value = notifyConfig.ntfy.topic || '';
+
+            const webhookBtn = document.getElementById('webhookEnabledBtn');
+            webhookBtn.innerText = `Webhook: ${notifyConfig.webhook.enabled ? 'On' : 'Off'}`;
+            webhookBtn.classList.toggle('active', notifyConfig.webhook.enabled);
+            document.getElementById('webhookFields').classList.toggle('hidden', !notifyConfig.webhook.enabled);
+            document.getElementById('webhookUrl').value = notifyConfig.webhook.url || '';
+        }
+
+        function gatherNotifyConfigFromUI() {
+            notifyConfig.ntfy.server = document.getElementById('ntfyServer').value.trim() || 'https://ntfy.sh';
+            notifyConfig.ntfy.topic = document.getElementById('ntfyTopic').value.trim();
+            notifyConfig.webhook.url = document.getElementById('webhookUrl').value.trim();
+        }
+
+        function toggleNotifyEnabled() { notifyConfig.enabled = !notifyConfig.enabled; applyNotifyConfigToUI(); }
+        function toggleNtfyEnabled() { notifyConfig.ntfy.enabled = !notifyConfig.ntfy.enabled; applyNotifyConfigToUI(); }
+        function toggleWebhookEnabled() { notifyConfig.webhook.enabled = !notifyConfig.webhook.enabled; applyNotifyConfigToUI(); }
+        function toggleNotifyTrigger(key) { notifyConfig.triggers[key] = !notifyConfig.triggers[key]; applyNotifyConfigToUI(); }
+
+        function generateNtfyTopic() {
+            const topic = 'todotxt-' + Math.random().toString(36).slice(2, 10);
+            document.getElementById('ntfyTopic').value = topic;
+        }
+
+        // --- Trigger detection ---
+        // Runs after every successful task load (i.e. on the existing 30s poll —
+        // no new polling loop). Dedupes via a key per task+trigger+due-date so the
+        // same task doesn't re-notify every cycle; keys are pruned once a task is
+        // done/removed/no longer matches. Wrapped so it can never break sync/render.
+
+        function checkNotificationTriggers() {
+            try {
+                if (!notifyConfig.enabled) return;
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+                const activeKeys = new Set();
+
+                allTasks.forEach(t => {
+                    if (!t || !t.trim() || t.startsWith('x ') || t.startsWith('#')) return;
+                    const meta = getMeta(t);
+                    if (!meta.due) return;
+
+                    let triggerType = null;
+                    if (meta.isOverdue && notifyConfig.triggers.overdue) triggerType = 'overdue';
+                    else if (meta.isToday && notifyConfig.triggers.dueToday) triggerType = 'dueToday';
+                    else if (meta.due === tomorrowStr && notifyConfig.triggers.dueTomorrow) triggerType = 'dueTomorrow';
+                    if (!triggerType) return;
+
+                    const key = `${triggerType}:${meta.due}:${t}`;
+                    activeKeys.add(key);
+                    if (!notifiedTasks.has(key)) {
+                        fireNotifications(t, triggerType);
+                        notifiedTasks.add(key);
+                    }
+                });
+
+                // Prune stale keys (task completed, deleted, or edited past the trigger).
+                Array.from(notifiedTasks).forEach(k => { if (!activeKeys.has(k)) notifiedTasks.delete(k); });
+                localStorage.setItem('notified_tasks', JSON.stringify(Array.from(notifiedTasks)));
+            } catch (e) {
+                console.error('Notification trigger check failed:', e);
+            }
+        }
+
+        const TRIGGER_LABELS = { overdue: 'Overdue', dueToday: 'Due Today', dueTomorrow: 'Due Tomorrow', test: 'Test' };
+
+        function fireNotifications(taskText, triggerType) {
+            const cleanText = taskText.replace(/^\([A-Z]\)\s*/, '').replace(/\s*due:\S+/, '').trim();
+            const label = TRIGGER_LABELS[triggerType] || triggerType;
+            if (notifyConfig.ntfy.enabled) sendNtfy(label, cleanText);
+            if (notifyConfig.webhook.enabled) sendWebhook(label, cleanText, taskText);
+        }
+
+        async function sendNtfy(title, message) {
+            const topic = notifyConfig.ntfy.topic.trim();
+            if (!topic) return;
+            const server = (notifyConfig.ntfy.server || 'https://ntfy.sh').replace(/\/$/, '');
+            try {
+                await fetch(`${server}/${encodeURIComponent(topic)}`, {
+                    method: 'POST',
+                    headers: { 'Title': `to-do-txt: ${title}`, 'Tags': 'spiral_calendar_pad' },
+                    body: message || '(no description)'
+                });
+            } catch (e) {
+                console.error('ntfy send failed:', e);
+            }
+        }
+
+        async function sendWebhook(title, message, rawTask) {
+            const url = notifyConfig.webhook.url.trim();
+            if (!url) return;
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: `to-do-txt: ${title}`, message, task: rawTask, trigger: title, file: currentFile, timestamp: new Date().toISOString() })
+                });
+            } catch (e) {
+                console.error('Webhook send failed:', e);
+            }
+        }
+
+        function testNotification() {
+            gatherNotifyConfigFromUI();
+            if (!notifyConfig.ntfy.enabled && !notifyConfig.webhook.enabled) {
+                alert('Turn on ntfy and/or Webhook first, then send a test.');
+                return;
+            }
+            fireNotifications('(A) Test task from to-do-txt due:today', 'test');
+            setStatus('Test notification sent');
+        }
+
         init();
     </script>
 </body>
