@@ -12,7 +12,7 @@
     })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.4.0</title>
+    <title>to-do-txt v4.6.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -86,66 +86,49 @@
         .light .text-yellow-500 { color: var(--acc-yellow); }
         .light .text-red-500 { color: var(--acc-red); }
 
-        /* --- Printable Grid Feature --- */
+        /* --- WYSIWYG Print Styling --- */
         @media print {
-            /* Hide the main app UI entirely */
-            header, aside, #todoList, #bulkEditArea, #fileManagerOverlay { 
+            /* Hide the UI chrome completely */
+            header, aside, #bulkEditArea, #fileManagerOverlay { 
                 display: none !important; 
             }
             
-            /* Reset body for clean paper printing */
-            body { 
-                background: white !important; 
-                color: black !important; 
-                height: auto; 
-                overflow: visible; 
+            /* Remove scroll locks so the browser can paginate */
+            body, .app-grid, main { 
+                height: auto !important; 
+                overflow: visible !important; 
+                display: block !important;
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+                margin: 0 !important;
             }
 
-            /* Reveal and format the grid container */
-            #printContainer { 
-                display: grid !important; 
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
-                gap: 20px; 
-                align-items: start; 
-                padding: 0;
+            /* Strip out dark mode card backgrounds and borders to save ink */
+            .card-bg {
+                background: white !important;
+                border-color: #ddd !important;
             }
 
-            /* Kanban-style card for each header section */
-            .print-section { 
-                border: 1px solid #ccc; 
-                padding: 12px; 
-                border-radius: 8px; 
-                break-inside: avoid; /* Prevents splitting a category across pages */
+            /* Ensure text is completely black and readable */
+            .text-gray-100, .text-gray-500, .text-main {
+                color: black !important;
             }
 
-            .print-header { 
-                font-weight: 900; 
-                font-size: 1.1rem; 
-                border-bottom: 2px solid black; 
-                margin-bottom: 10px; 
-                padding-bottom: 4px; 
-                text-transform: uppercase; 
+            /* Keep the colored priority borders on the left */
+            .prio-a { border-left-color: #fb923c !important; border-left-width: 4px !important; }
+            .prio-b { border-left-color: #facc15 !important; border-left-width: 4px !important; }
+            .prio-none { border-left-color: #3b82f6 !important; border-left-width: 4px !important; }
+
+            /* Prevent tasks or headers from slicing horizontally across two pages */
+            #todoList > div {
+                break-inside: avoid;
+                page-break-inside: avoid;
             }
 
-            .print-task { 
-                font-size: 0.85rem; 
-                margin-bottom: 8px; 
-                padding-left: 18px; 
-                text-indent: -18px; 
-                line-height: 1.3;
-            }
-
-            /* Adds a clean empty checkbox for physical checking */
-            .print-task::before { 
-                content: "☐ "; 
-                font-family: monospace; 
-                font-size: 1.1rem;
-            }
-        }
-
-        /* Keep hidden on the screen */
-        #printContainer { 
-            display: none; 
+            /* Hide interactive UI elements from the list */
+            button { display: none !important; }
+            input[type="checkbox"] { appearance: auto !important; } /* Force standard checkboxes */
         }
     </style>
 </head>
@@ -194,7 +177,8 @@
                 <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
                 <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
                 <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Backup</button>
-                <button onclick="printGrid()" class="btn-toggle hover:bg-white/5">Print Grid</button>
+                <!-- Triggers browser native print dialog directly -->
+                <button onclick="window.print()" class="btn-toggle hover:bg-white/5">Print List</button>
             </div>
         </div>
     </header>
@@ -227,64 +211,11 @@
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Created Dates <span class="toggle-icon"></span></summary><div id="createdDateList" class="space-y-1 text-xs pt-2"></div></details>
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Priorities <span class="toggle-icon"></span></summary><div id="priorityFilterList" class="space-y-1 text-xs pt-2"></div></details>
                 <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Projects <span class="toggle-icon"></span></summary><div id="projectList" class="space-y-1 text-xs pt-2"></div></details>
-                <details open><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
-                <details class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Notifications <span class="toggle-icon"></span></summary>
-                    <div class="space-y-3 text-xs pt-2">
-                        <p class="text-[9px] opacity-40 leading-tight">Optional. Get pinged when a task is overdue or due — via <a href="https://ntfy.sh" target="_blank" class="underline hover:text-blue-400">ntfy</a> (no signup needed) and/or a webhook of your choice. Settings sync as <code>.notify.json</code> alongside your task files.</p>
-                        <button onclick="toggleNotifyEnabled()" id="notifyEnabledBtn" class="btn-toggle w-full">Notifications: Off</button>
-                        <div id="notifySettingsBody" class="hidden space-y-3">
-                            <div>
-                                <div class="text-[9px] font-black text-gray-500 uppercase mb-1">Notify me when a task is</div>
-                                <div class="flex flex-wrap gap-1">
-                                    <button onclick="toggleNotifyTrigger('overdue')" id="trigOverdueBtn" class="btn-toggle">Overdue</button>
-                                    <button onclick="toggleNotifyTrigger('dueToday')" id="trigTodayBtn" class="btn-toggle">Due Today</button>
-                                    <button onclick="toggleNotifyTrigger('dueTomorrow')" id="trigTomorrowBtn" class="btn-toggle">Due Tomorrow</button>
-                                </div>
-                            </div>
-                            <div class="border-t border-white/5 pt-3">
-                                <button onclick="toggleNtfyEnabled()" id="ntfyEnabledBtn" class="btn-toggle w-full mb-2">ntfy: Off</button>
-                                <div id="ntfyFields" class="hidden space-y-1">
-                                    <input type="text" id="ntfyServer" placeholder="https://ntfy.sh" class="w-full input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500">
-                                    <div class="flex gap-1">
-                                        <input type="text" id="ntfyTopic" placeholder="pick a unique topic name" class="flex-1 input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500">
-                                        <button onclick="generateNtfyTopic()" class="btn-toggle" title="Generate a random topic name">🎲</button>
-                                    </div>
-                                    <p class="text-[9px] opacity-40 leading-tight">Subscribe to this topic in the ntfy app (iOS/Android) or at ntfy.sh/&lt;topic&gt; in a browser to receive alerts.</p>
-                                </div>
-                            </div>
-                            <div class="border-t border-white/5 pt-3">
-                                <button onclick="toggleWebhookEnabled()" id="webhookEnabledBtn" class="btn-toggle w-full mb-2">Webhook: Off</button>
-                                <div id="webhookFields" class="hidden space-y-1">
-                                    <input type="text" id="webhookUrl" placeholder="https://your-automation-url" class="w-full input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500">
-                                    <p class="text-[9px] opacity-40 leading-tight">Posts JSON to any URL — n8n, Zapier, Make, EmailJS, Discord, etc. Point it at something that can send you an email.</p>
-                                </div>
-                            </div>
-                            <div class="border-t border-white/5 pt-3">
-                                <div class="text-[9px] font-black text-gray-500 uppercase mb-2">Email Digest (Manual)</div>
-                                <input type="email" id="emailRecipient" placeholder="you@example.com" class="w-full input-bg border rounded px-2 py-1.5 text-[11px] outline-none focus:border-blue-500 mb-2">
-                                <div class="flex flex-wrap gap-1 mb-2">
-                                    <button onclick="toggleEmailInclude('overdue')" id="emailOverdueBtn" class="btn-toggle">Overdue</button>
-                                    <button onclick="toggleEmailInclude('dueToday')" id="emailTodayBtn" class="btn-toggle">Due Today</button>
-                                    <button onclick="toggleEmailInclude('dueTomorrow')" id="emailTomorrowBtn" class="btn-toggle">Due Tomorrow</button>
-                                    <button onclick="toggleEmailInclude('noDueDate')" id="emailNoDateBtn" class="btn-toggle">No Due Date</button>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="generateEmailDigest()" class="bg-blue-600 flex-1 py-2 rounded font-bold text-[10px] uppercase text-white">Generate Email</button>
-                                    <button onclick="copyEmailDigest()" class="btn-toggle flex-1">Copy Text</button>
-                                </div>
-                                <p class="text-[9px] opacity-40 leading-tight mt-1">Opens your default mail app pre-filled with a digest of matching tasks. Nothing sends automatically — you review and hit send yourself. "Copy Text" is a fallback if your device has no default mail app configured.</p>
-                            </div>
-                            <div class="flex gap-2 pt-1">
-                                <button onclick="saveNotifyConfig()" class="bg-blue-600 flex-1 py-2 rounded font-bold text-[10px] uppercase text-white">Save</button>
-                                <button onclick="testNotification()" class="btn-toggle flex-1">Send Test</button>
-                            </div>
-                        </div>
-                    </div>
-                </details>
+                <details open class="pb-24"><summary class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contexts <span class="toggle-icon"></span></summary><div id="contextList" class="space-y-1 text-xs pt-2"></div></details>
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.4.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.6.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -314,9 +245,6 @@
                     <div id="bulkFileList" class="space-y-2"></div>
                 </div>
             </div>
-
-            <!-- Print Grid Container -->
-            <div id="printContainer"></div>
         </main>
     </div>
 
@@ -332,22 +260,7 @@
         
         let existingProjects = new Set(), existingContexts = new Set();
 
-        // --- Notifications (ntfy / webhook) ---
-        // Off by default, config synced as .notify.json alongside task files.
-        // Fully additive: nothing here runs unless the person opts in.
-        let notifyConfig = {
-            enabled: false,
-            triggers: { overdue: true, dueToday: true, dueTomorrow: false },
-            ntfy: { enabled: false, server: 'https://ntfy.sh', topic: '' },
-            webhook: { enabled: false, url: '' },
-            email: { recipient: '', include: { overdue: true, dueToday: true, dueTomorrow: false, noDueDate: false } }
-        };
-        let notifiedTasks = new Set(JSON.parse(localStorage.getItem('notified_tasks') || '[]'));
-
         // --- Light/Dark theme ---
-        // The head script already applied the stored/system preference as a class on <html>
-        // before first paint, to avoid a flash of the wrong theme. Here we just sync JS state
-        // to that and wire up the toggle button.
         let theme = document.documentElement.classList.contains('light') ? 'light' : 'dark';
         function applyThemeButton() {
             const btn = document.getElementById('themeToggleBtn');
@@ -362,9 +275,7 @@
         applyThemeButton();
 
         // --- Sync mode (Dropbox vs Local Folder) ---
-        // No default: stays null until the person explicitly picks a backend
-        // (either on this visit, or a prior one that set it in localStorage).
-        let syncMode = localStorage.getItem('sync_mode') || null; // null | 'dropbox' | 'local'
+        let syncMode = localStorage.getItem('sync_mode') || null; 
         let localDirHandle = null;
         let pollInterval = null;
         const HAS_FS_ACCESS = typeof window.showDirectoryPicker === 'function';
@@ -382,8 +293,6 @@
             });
 
             if (!syncMode) {
-                // First-ever visit (or after Disconnect/Logout): don't assume a backend,
-                // don't redirect to Dropbox OAuth. Wait for an explicit choice.
                 showSyncChooser();
                 return;
             }
@@ -394,13 +303,12 @@
                 if (restored) {
                     await loadTasks();
                     updateFileUI();
-                    await loadNotifyConfig();
                     startPolling();
                 }
-                return; // skip Dropbox auth entirely while in local mode
+                return; 
             }
 
-            // --- Dropbox flow (only reached if the person previously chose Dropbox) ---
+            // --- Dropbox flow ---
             const urlParams = new URLSearchParams(window.location.hash.substring(1));
             const token = urlParams.get('access_token') || localStorage.getItem('dbx_token');
 
@@ -412,7 +320,6 @@
                 await scanDropboxFiles();
                 await loadTasks(); 
                 updateFileUI(); 
-                await loadNotifyConfig();
                 startPolling();
             } else { 
                 handleAuth(); 
@@ -447,10 +354,6 @@
             render();
         }
 
-        // =====================================================================
-        // SYNC MODE: shared dispatchers
-        // =====================================================================
-
         async function loadTasks() {
             if (isSyncing || editingBulk || editingIndex !== null) return;
             if (syncMode === 'local') return loadTasksLocal();
@@ -483,7 +386,6 @@
                         await scanLocalFiles();
                         await loadTasks();
                         updateFileUI();
-                        await loadNotifyConfig();
                         startPolling();
                     }
                 } else {
@@ -496,7 +398,6 @@
                     await scanDropboxFiles();
                     await loadTasks();
                     updateFileUI();
-                    await loadNotifyConfig();
                     startPolling();
                 } else {
                     handleAuth();
@@ -532,10 +433,6 @@
                 hint.innerText = '';
             }
         }
-
-        // =====================================================================
-        // LOCAL FOLDER SYNC (File System Access API)
-        // =====================================================================
 
         function idbOpen() {
             return new Promise((resolve, reject) => {
@@ -573,9 +470,6 @@
             return false;
         }
 
-        // Called on load: checks for a remembered handle without prompting (queryPermission
-        // never needs a user gesture). If permission has lapsed, the UI falls back to a
-        // "Connect Folder" button the user can tap to re-grant access.
         async function tryRestoreLocalHandle() {
             try {
                 const handle = await idbGet('dir');
@@ -595,8 +489,6 @@
             }
         }
 
-        // Triggered by a click, so this is allowed to prompt the OS folder picker
-        // and/or the permission dialog.
         async function connectLocalFolder() {
             if (!HAS_FS_ACCESS) {
                 alert('Local Folder sync needs Chrome, Edge, or another Chromium-based browser.');
@@ -618,7 +510,6 @@
                 await scanLocalFiles();
                 updateFileUI();
                 await loadTasks();
-                await loadNotifyConfig();
                 updateSyncModeUI();
                 startPolling();
             } catch (e) {
@@ -670,7 +561,6 @@
 
                 render();
                 setStatus(`Loaded ${new Date().toLocaleTimeString([], {hour12:false})}`);
-                checkNotificationTriggers();
             } catch (e) {
                 console.error('Local read error:', e);
                 if (e.name === 'NotAllowedError') {
@@ -708,10 +598,6 @@
                 }
             } finally { isSyncing = false; }
         }
-
-        // =====================================================================
-        // DROPBOX SYNC (unchanged logic, renamed to *Dropbox)
-        // =====================================================================
 
         async function scanDropboxFiles() {
             if (!dbx) return;
@@ -755,7 +641,6 @@
 
                 render();
                 setStatus(`Synced ${new Date().toLocaleTimeString([], {hour12:false})}`);
-                checkNotificationTriggers();
             } catch (e) { 
                 if (e.status === 401 || e.status === 400) {
                     handleAuthRecovery();
@@ -1262,361 +1147,6 @@
             try { await idbSet('dir', null); } catch (e) { /* ignore */ }
             localStorage.clear();
             location.reload();
-        }
-        // =====================================================================
-        // NOTIFICATIONS (ntfy / webhook) — fully optional, off by default
-        // =====================================================================
-
-        // --- Config persistence: .notify.json lives next to the todo*.txt files ---
-        // Uses the same backend the person already picked for tasks. Load never
-        // writes anything; save only touches this one file, never task files.
-
-        async function loadNotifyConfig() {
-            try {
-                let text = null;
-                if (syncMode === 'local' && localDirHandle) {
-                    const fh = await localDirHandle.getFileHandle('.notify.json', { create: false });
-                    const f = await fh.getFile();
-                    text = await f.text();
-                } else if (syncMode === 'dropbox' && dbx) {
-                    const res = await dbx.filesDownload({ path: '/.notify.json' });
-                    text = await res.result.fileBlob.text();
-                }
-                if (text && text.trim()) {
-                    const parsed = JSON.parse(text);
-                    notifyConfig = {
-                        enabled: !!parsed.enabled,
-                        triggers: { overdue: true, dueToday: true, dueTomorrow: false, ...(parsed.triggers || {}) },
-                        ntfy: { enabled: false, server: 'https://ntfy.sh', topic: '', ...(parsed.ntfy || {}) },
-                        webhook: { enabled: false, url: '', ...(parsed.webhook || {}) },
-                        email: {
-                            recipient: (parsed.email || {}).recipient || '',
-                            include: { overdue: true, dueToday: true, dueTomorrow: false, noDueDate: false, ...((parsed.email || {}).include || {}) }
-                        }
-                    };
-                }
-            } catch (e) {
-                // No config file yet, or it's unreadable — defaults (off) stand.
-            }
-            applyNotifyConfigToUI();
-        }
-
-        async function saveNotifyConfig() {
-            gatherNotifyConfigFromUI();
-            const text = JSON.stringify(notifyConfig, null, 2);
-            try {
-                if (syncMode === 'local' && localDirHandle) {
-                    const fh = await localDirHandle.getFileHandle('.notify.json', { create: true });
-                    const writable = await fh.createWritable();
-                    await writable.write(text);
-                    await writable.close();
-                } else if (syncMode === 'dropbox' && dbx) {
-                    await dbx.filesUpload({ path: '/.notify.json', contents: text, mode: { '.tag': 'overwrite' } });
-                } else {
-                    alert('Connect a sync backend first (Dropbox or Local Folder) so notification settings have somewhere to save.');
-                    return;
-                }
-                setStatus('Notify settings saved');
-                checkNotificationTriggers();
-            } catch (e) {
-                console.error('Save notify config failed:', e);
-                alert('Could not save notification settings: ' + e.message);
-            }
-        }
-
-        // --- UI wiring ---
-
-        function applyNotifyConfigToUI() {
-            const enabledBtn = document.getElementById('notifyEnabledBtn');
-            const body = document.getElementById('notifySettingsBody');
-            enabledBtn.innerText = `Notifications: ${notifyConfig.enabled ? 'On' : 'Off'}`;
-            enabledBtn.classList.toggle('active', notifyConfig.enabled);
-            body.classList.toggle('hidden', !notifyConfig.enabled);
-
-            document.getElementById('trigOverdueBtn').classList.toggle('active', notifyConfig.triggers.overdue);
-            document.getElementById('trigTodayBtn').classList.toggle('active', notifyConfig.triggers.dueToday);
-            document.getElementById('trigTomorrowBtn').classList.toggle('active', notifyConfig.triggers.dueTomorrow);
-
-            const ntfyBtn = document.getElementById('ntfyEnabledBtn');
-            ntfyBtn.innerText = `ntfy: ${notifyConfig.ntfy.enabled ? 'On' : 'Off'}`;
-            ntfyBtn.classList.toggle('active', notifyConfig.ntfy.enabled);
-            document.getElementById('ntfyFields').classList.toggle('hidden', !notifyConfig.ntfy.enabled);
-            document.getElementById('ntfyServer').value = notifyConfig.ntfy.server || 'https://ntfy.sh';
-            document.getElementById('ntfyTopic').value = notifyConfig.ntfy.topic || '';
-
-            const webhookBtn = document.getElementById('webhookEnabledBtn');
-            webhookBtn.innerText = `Webhook: ${notifyConfig.webhook.enabled ? 'On' : 'Off'}`;
-            webhookBtn.classList.toggle('active', notifyConfig.webhook.enabled);
-            document.getElementById('webhookFields').classList.toggle('hidden', !notifyConfig.webhook.enabled);
-            document.getElementById('webhookUrl').value = notifyConfig.webhook.url || '';
-
-            document.getElementById('emailRecipient').value = notifyConfig.email.recipient || '';
-            document.getElementById('emailOverdueBtn').classList.toggle('active', notifyConfig.email.include.overdue);
-            document.getElementById('emailTodayBtn').classList.toggle('active', notifyConfig.email.include.dueToday);
-            document.getElementById('emailTomorrowBtn').classList.toggle('active', notifyConfig.email.include.dueTomorrow);
-            document.getElementById('emailNoDateBtn').classList.toggle('active', notifyConfig.email.include.noDueDate);
-        }
-
-        function gatherNotifyConfigFromUI() {
-            notifyConfig.ntfy.server = document.getElementById('ntfyServer').value.trim() || 'https://ntfy.sh';
-            notifyConfig.ntfy.topic = document.getElementById('ntfyTopic').value.trim();
-            notifyConfig.webhook.url = document.getElementById('webhookUrl').value.trim();
-            notifyConfig.email.recipient = document.getElementById('emailRecipient').value.trim();
-        }
-
-        function toggleNotifyEnabled() { notifyConfig.enabled = !notifyConfig.enabled; applyNotifyConfigToUI(); }
-        function toggleNtfyEnabled() { notifyConfig.ntfy.enabled = !notifyConfig.ntfy.enabled; applyNotifyConfigToUI(); }
-        function toggleWebhookEnabled() { notifyConfig.webhook.enabled = !notifyConfig.webhook.enabled; applyNotifyConfigToUI(); }
-        function toggleNotifyTrigger(key) { notifyConfig.triggers[key] = !notifyConfig.triggers[key]; applyNotifyConfigToUI(); }
-        function toggleEmailInclude(key) { notifyConfig.email.include[key] = !notifyConfig.email.include[key]; applyNotifyConfigToUI(); }
-
-        function generateNtfyTopic() {
-            const topic = 'todotxt-' + Math.random().toString(36).slice(2, 10);
-            document.getElementById('ntfyTopic').value = topic;
-        }
-
-        // --- Trigger detection ---
-        // Runs after every successful task load (i.e. on the existing 30s poll —
-        // no new polling loop). Dedupes via a key per task+trigger+due-date so the
-        // same task doesn't re-notify every cycle; keys are pruned once a task is
-        // done/removed/no longer matches. Wrapped so it can never break sync/render.
-
-        function checkNotificationTriggers() {
-            try {
-                if (!notifyConfig.enabled) return;
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-                const activeKeys = new Set();
-
-                allTasks.forEach(t => {
-                    if (!t || !t.trim() || t.startsWith('x ') || t.startsWith('#')) return;
-                    const meta = getMeta(t);
-                    if (!meta.due) return;
-
-                    let triggerType = null;
-                    if (meta.isOverdue && notifyConfig.triggers.overdue) triggerType = 'overdue';
-                    else if (meta.isToday && notifyConfig.triggers.dueToday) triggerType = 'dueToday';
-                    else if (meta.due === tomorrowStr && notifyConfig.triggers.dueTomorrow) triggerType = 'dueTomorrow';
-                    if (!triggerType) return;
-
-                    const key = `${triggerType}:${meta.due}:${t}`;
-                    activeKeys.add(key);
-                    if (!notifiedTasks.has(key)) {
-                        fireNotifications(t, triggerType);
-                        notifiedTasks.add(key);
-                    }
-                });
-
-                // Prune stale keys (task completed, deleted, or edited past the trigger).
-                Array.from(notifiedTasks).forEach(k => { if (!activeKeys.has(k)) notifiedTasks.delete(k); });
-                localStorage.setItem('notified_tasks', JSON.stringify(Array.from(notifiedTasks)));
-            } catch (e) {
-                console.error('Notification trigger check failed:', e);
-            }
-        }
-
-        const TRIGGER_LABELS = { overdue: 'Overdue', dueToday: 'Due Today', dueTomorrow: 'Due Tomorrow', test: 'Test' };
-
-        function fireNotifications(taskText, triggerType) {
-            const cleanText = taskText.replace(/^\([A-Z]\)\s*/, '').replace(/\s*due:\S+/, '').trim();
-            const label = TRIGGER_LABELS[triggerType] || triggerType;
-            if (notifyConfig.ntfy.enabled) sendNtfy(label, cleanText);
-            if (notifyConfig.webhook.enabled) sendWebhook(label, cleanText, taskText);
-        }
-
-        async function sendNtfy(title, message) {
-            const topic = notifyConfig.ntfy.topic.trim();
-            if (!topic) return;
-            const server = (notifyConfig.ntfy.server || 'https://ntfy.sh').replace(/\/$/, '');
-            try {
-                await fetch(`${server}/${encodeURIComponent(topic)}`, {
-                    method: 'POST',
-                    headers: { 'Title': `to-do-txt: ${title}`, 'Tags': 'spiral_calendar_pad' },
-                    body: message || '(no description)'
-                });
-            } catch (e) {
-                console.error('ntfy send failed:', e);
-            }
-        }
-
-        async function sendWebhook(title, message, rawTask) {
-            const url = notifyConfig.webhook.url.trim();
-            if (!url) return;
-            try {
-                await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: `to-do-txt: ${title}`, message, task: rawTask, trigger: title, file: currentFile, timestamp: new Date().toISOString() })
-                });
-            } catch (e) {
-                console.error('Webhook send failed:', e);
-            }
-        }
-
-        // --- Email Digest (manual, mailto-based) ---
-        // Deliberately NOT automatic: opens a pre-filled draft in the person's own
-        // mail client so they review before anything sends. No SMTP, no stored
-        // credentials, no third-party mail service required.
-
-        function buildEmailDigest() {
-            gatherNotifyConfigFromUI();
-            const today = new Date(); today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowStr = tomorrow.toISOString().split('T')[0];
-            const inc = notifyConfig.email.include;
-            const groups = { overdue: [], dueToday: [], dueTomorrow: [], noDueDate: [] };
-
-            allTasks.forEach(t => {
-                if (!t || !t.trim() || t.startsWith('x ') || t.startsWith('#')) return;
-                const meta = getMeta(t);
-                const clean = t.replace(/^\([A-Z]\)\s*/, '').trim();
-                if (meta.due) {
-                    if (meta.isOverdue && inc.overdue) groups.overdue.push(clean);
-                    else if (meta.isToday && inc.dueToday) groups.dueToday.push(clean);
-                    else if (meta.due === tomorrowStr && inc.dueTomorrow) groups.dueTomorrow.push(clean);
-                } else if (inc.noDueDate) {
-                    groups.noDueDate.push(clean);
-                }
-            });
-
-            const sections = [
-                ['\u26A0 OVERDUE', groups.overdue],
-                ['\uD83D\uDCC5 DUE TODAY', groups.dueToday],
-                ['\uD83D\uDD1C DUE TOMORROW', groups.dueTomorrow],
-                ['\uD83D\uDCCB NO DUE DATE', groups.noDueDate]
-            ].filter(([, list]) => list.length > 0);
-
-            const dateStr = today.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            let body = `to-do-txt Digest \u2014 ${dateStr}\r\n`;
-
-            if (sections.length === 0) {
-                body += `\r\nNothing matching your selected categories. Nice work!\r\n`;
-            } else {
-                const MAX_PER_SECTION = 10;
-                sections.forEach(([label, list]) => {
-                    body += `\r\n${label} (${list.length})\r\n`;
-                    list.slice(0, MAX_PER_SECTION).forEach(line => { body += `  - ${line}\r\n`; });
-                    if (list.length > MAX_PER_SECTION) body += `  ...and ${list.length - MAX_PER_SECTION} more\r\n`;
-                });
-            }
-            body += `\r\n\u2014\r\nSent from to-do-txt${currentFile ? ' (' + currentFile + ')' : ''}`;
-
-            // mailto: has real-world length limits in some browsers/OSes — keep it safe.
-            if (body.length > 1800) body = body.slice(0, 1800) + `\r\n\r\n... (truncated \u2014 open the app for the full list)`;
-
-            const subjectParts = [];
-            if (groups.overdue.length) subjectParts.push(`${groups.overdue.length} overdue`);
-            if (groups.dueToday.length) subjectParts.push(`${groups.dueToday.length} due today`);
-            const subject = subjectParts.length ? `to-do-txt: ${subjectParts.join(', ')}` : `to-do-txt digest`;
-
-            return { subject, body };
-        }
-
-        function generateEmailDigest() {
-            const recipient = document.getElementById('emailRecipient').value.trim();
-            const { subject, body } = buildEmailDigest();
-            const mailto = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            window.location.href = mailto;
-            setStatus('Email digest opened');
-        }
-
-        async function copyEmailDigest() {
-            const recipient = document.getElementById('emailRecipient').value.trim();
-            const { subject, body } = buildEmailDigest();
-            const text = `To: ${recipient || '(not set)'}\r\nSubject: ${subject}\r\n\r\n${body}`;
-            try {
-                await navigator.clipboard.writeText(text);
-                setStatus('Digest copied to clipboard');
-            } catch (e) {
-                prompt('Copy this text manually (clipboard access was blocked):', text);
-            }
-        }
-
-        function testNotification() {
-            gatherNotifyConfigFromUI();
-            if (!notifyConfig.ntfy.enabled && !notifyConfig.webhook.enabled) {
-                alert('Turn on ntfy and/or Webhook first, then send a test.');
-                return;
-            }
-            fireNotifications('(A) Test task from to-do-txt due:today', 'test');
-            setStatus('Test notification sent');
-        }
-
-        function printGrid() {
-            const container = document.getElementById('printContainer');
-            const groupedTasks = {};
-            let currentHeader = 'Uncategorized';
-
-            // 1. Read the DOM to capture the exact WYSIWYG filtered/sorted order
-            const nodes = document.getElementById('todoList').children;
-            
-            for (let i = 0; i < nodes.length; i++) {
-                const node = nodes[i];
-                
-                // If it's a visual header, update our grouping category
-                if (node.classList.contains('h1-style') || node.classList.contains('h2-style')) {
-                    currentHeader = node.innerText.trim();
-                    if (!groupedTasks[currentHeader]) groupedTasks[currentHeader] = [];
-                } 
-                // If it's a task row, verify it's not completed
-                else if (node.tagName === 'DIV' && node.querySelector('input[type="checkbox"]')) {
-                    const isDone = node.querySelector('input[type="checkbox"]').checked;
-                    
-                    if (!isDone) {
-                        if (!groupedTasks[currentHeader]) groupedTasks[currentHeader] = [];
-                        
-                        // Extract the exact task index from the edit handler to get the raw text
-                        const editArea = node.querySelector('[onclick^="startInlineEdit"]');
-                        if (editArea) {
-                            const match = editArea.getAttribute('onclick').match(/\d+/);
-                            if (match) {
-                                const taskIndex = parseInt(match[0]);
-                                let rawText = allTasks[taskIndex];
-                                
-                                // Strip metadata so it matches the clean UI text on paper
-                                let cleanText = rawText.replace(/\([A-Z]\)\s*/g, '');
-                                
-                                // Remove created dates if present
-                                const createMatch = rawText.match(/^(?:\([A-Z]\)\s+)?(\d{4}-\d{2}-\d{2})/);
-                                if (createMatch) {
-                                    cleanText = cleanText.replace(new RegExp('^' + createMatch[1] + '\\s+'), '');
-                                }
-                                
-                                cleanText = cleanText
-                                    .replace(/\+[\w\-]+/g, '')
-                                    .replace(/@[\w\-]+/g, '')
-                                    .replace(/due:\S+/g, '')
-                                    .trim();
-                                    
-                                groupedTasks[currentHeader].push(cleanText || rawText);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 2. Generate the HTML structure
-            let html = '';
-            for (const [header, tasks] of Object.entries(groupedTasks)) {
-                if (tasks.length === 0) continue; // Skip headers with no open tasks
-
-                html += `
-                <div class="print-section">
-                    <div class="print-header">${header}</div>`;
-                
-                tasks.forEach(t => {
-                    html += `<div class="print-task">${t}</div>`;
-                });
-                
-                html += `</div>`;
-            }
-
-            container.innerHTML = html || '<p>No open tasks to print.</p>';
-
-            // 3. Trigger the browser print dialog
-            window.print();
         }
 
         init();
