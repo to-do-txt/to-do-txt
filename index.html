@@ -12,7 +12,7 @@
     })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>to-do-txt v4.3.0</title>
+    <title>to-do-txt v4.4.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <style>
@@ -85,6 +85,68 @@
         .light .text-orange-400 { color: var(--acc-orange); }
         .light .text-yellow-500 { color: var(--acc-yellow); }
         .light .text-red-500 { color: var(--acc-red); }
+
+        /* --- Printable Grid Feature --- */
+        @media print {
+            /* Hide the main app UI entirely */
+            header, aside, #todoList, #bulkEditArea, #fileManagerOverlay { 
+                display: none !important; 
+            }
+            
+            /* Reset body for clean paper printing */
+            body { 
+                background: white !important; 
+                color: black !important; 
+                height: auto; 
+                overflow: visible; 
+            }
+
+            /* Reveal and format the grid container */
+            #printContainer { 
+                display: grid !important; 
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+                gap: 20px; 
+                align-items: start; 
+                padding: 0;
+            }
+
+            /* Kanban-style card for each header section */
+            .print-section { 
+                border: 1px solid #ccc; 
+                padding: 12px; 
+                border-radius: 8px; 
+                break-inside: avoid; /* Prevents splitting a category across pages */
+            }
+
+            .print-header { 
+                font-weight: 900; 
+                font-size: 1.1rem; 
+                border-bottom: 2px solid black; 
+                margin-bottom: 10px; 
+                padding-bottom: 4px; 
+                text-transform: uppercase; 
+            }
+
+            .print-task { 
+                font-size: 0.85rem; 
+                margin-bottom: 8px; 
+                padding-left: 18px; 
+                text-indent: -18px; 
+                line-height: 1.3;
+            }
+
+            /* Adds a clean empty checkbox for physical checking */
+            .print-task::before { 
+                content: "☐ "; 
+                font-family: monospace; 
+                font-size: 1.1rem;
+            }
+        }
+
+        /* Keep hidden on the screen */
+        #printContainer { 
+            display: none; 
+        }
     </style>
 </head>
 <body class="font-sans">
@@ -132,6 +194,7 @@
                 <div class="h-4 w-[1px] bg-white/10 mx-1"></div>
                 <button onclick="toggleBulkEdit()" class="btn-toggle hover:bg-white/5">Bulk Edit</button>
                 <button onclick="exportFile()" class="btn-toggle hover:bg-white/5">Backup</button>
+                <button onclick="printGrid()" class="btn-toggle hover:bg-white/5">Print Grid</button>
             </div>
         </div>
     </header>
@@ -221,7 +284,7 @@
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.3.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.4.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -251,6 +314,9 @@
                     <div id="bulkFileList" class="space-y-2"></div>
                 </div>
             </div>
+
+            <!-- Print Grid Container -->
+            <div id="printContainer"></div>
         </main>
     </div>
 
@@ -1476,6 +1542,81 @@
             }
             fireNotifications('(A) Test task from to-do-txt due:today', 'test');
             setStatus('Test notification sent');
+        }
+
+        function printGrid() {
+            const container = document.getElementById('printContainer');
+            const groupedTasks = {};
+            let currentHeader = 'Uncategorized';
+
+            // 1. Read the DOM to capture the exact WYSIWYG filtered/sorted order
+            const nodes = document.getElementById('todoList').children;
+            
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                
+                // If it's a visual header, update our grouping category
+                if (node.classList.contains('h1-style') || node.classList.contains('h2-style')) {
+                    currentHeader = node.innerText.trim();
+                    if (!groupedTasks[currentHeader]) groupedTasks[currentHeader] = [];
+                } 
+                // If it's a task row, verify it's not completed
+                else if (node.tagName === 'DIV' && node.querySelector('input[type="checkbox"]')) {
+                    const isDone = node.querySelector('input[type="checkbox"]').checked;
+                    
+                    if (!isDone) {
+                        if (!groupedTasks[currentHeader]) groupedTasks[currentHeader] = [];
+                        
+                        // Extract the exact task index from the edit handler to get the raw text
+                        const editArea = node.querySelector('[onclick^="startInlineEdit"]');
+                        if (editArea) {
+                            const match = editArea.getAttribute('onclick').match(/\d+/);
+                            if (match) {
+                                const taskIndex = parseInt(match[0]);
+                                let rawText = allTasks[taskIndex];
+                                
+                                // Strip metadata so it matches the clean UI text on paper
+                                let cleanText = rawText.replace(/\([A-Z]\)\s*/g, '');
+                                
+                                // Remove created dates if present
+                                const createMatch = rawText.match(/^(?:\([A-Z]\)\s+)?(\d{4}-\d{2}-\d{2})/);
+                                if (createMatch) {
+                                    cleanText = cleanText.replace(new RegExp('^' + createMatch[1] + '\\s+'), '');
+                                }
+                                
+                                cleanText = cleanText
+                                    .replace(/\+[\w\-]+/g, '')
+                                    .replace(/@[\w\-]+/g, '')
+                                    .replace(/due:\S+/g, '')
+                                    .trim();
+                                    
+                                groupedTasks[currentHeader].push(cleanText || rawText);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Generate the HTML structure
+            let html = '';
+            for (const [header, tasks] of Object.entries(groupedTasks)) {
+                if (tasks.length === 0) continue; // Skip headers with no open tasks
+
+                html += `
+                <div class="print-section">
+                    <div class="print-header">${header}</div>`;
+                
+                tasks.forEach(t => {
+                    html += `<div class="print-task">${t}</div>`;
+                });
+                
+                html += `</div>`;
+            }
+
+            container.innerHTML = html || '<p>No open tasks to print.</p>';
+
+            // 3. Trigger the browser print dialog
+            window.print();
         }
 
         init();
