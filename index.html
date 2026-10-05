@@ -224,7 +224,7 @@
                     </div>
                     <button onclick="connectLocalFolder()" id="connectLocalBtn" class="hidden w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all mb-1">Connect Folder</button>
                     <button onclick="disconnectLocal()" id="disconnectLocalBtn" class="hidden w-full text-[10px] font-black border border-red-900/50 text-red-500 py-2 rounded uppercase">Disconnect Folder</button>
-                    <button onclick="connectGdrive(true)" id="connectGdriveBtn" class="hidden w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all mb-1">Connect Google Drive</button>
+                    <button onclick="connectGdriveAndLoad()" id="connectGdriveBtn" class="hidden w-full text-[10px] font-black bg-blue-600/10 border border-blue-500/30 text-blue-400 py-2 rounded uppercase hover:bg-blue-600/20 transition-all mb-1">Connect Google Drive</button>
                     <p id="syncModeHint" class="text-[9px] opacity-40 mt-2 leading-tight"></p>
                 </section>
                 <section>
@@ -419,12 +419,12 @@
         // Shared by startup and switching to a remote backend
         async function activateRemote() {
             updateSyncModeUI();
+            startPolling();   // also retries the silent Google sign-in while not connected
             if (!adapters[syncMode].ready()) return;
             await scanRemoteFiles();
             await flushRemote();
             await loadRemote();
             updateFileUI();
-            startPolling();
         }
 
         function showSyncChooser() {
@@ -484,6 +484,7 @@
             syncMode = mode;
             localStorage.setItem('sync_mode', mode);
             allTasks = [];   // the list still belongs to the previous backend until the new one loads
+            loadedKey = null;
             render();
             updateSyncModeUI();
 
@@ -639,6 +640,7 @@
             localDirHandle = null;
             try { await idbSet('dir', null); } catch (e) { /* ignore */ }
             allTasks = [];
+            loadedKey = null;
             await setSyncMode('dropbox');
         }
 
@@ -731,6 +733,9 @@
         const pendingWrites = new Map();  // "mode:/path" -> full file text not yet on the server
         let uploading = false, flushing = false, writes = 0;
         let gToken = null, gConnecting = false;
+        // "mode:/path" that allTasks was really loaded from (or restored from pending edits) in this page-life.
+        // Not persisted: syncState survives reloads, but the in-memory list does not.
+        let loadedKey = null;
 
         const nowTime = () => new Date().toLocaleTimeString([], {hour12:false});
         const isRemoteMode = () => syncMode === 'dropbox' || syncMode === 'gdrive';
@@ -840,6 +845,7 @@
             const key = syncKey(currentFile);
             if (pendingWrites.has(key)) {
                 allTasks = pendingWrites.get(key).split('\n');
+                loadedKey = key;
                 render();
             }
         }
@@ -936,6 +942,11 @@
             }
         }
 
+        // Connect button: signing in alone loads nothing, so load (and flush pending edits) right after
+        async function connectGdriveAndLoad() {
+            if (await connectGdrive(true)) await activateRemote();
+        }
+
         // ---- shared engine ----
         async function scanRemoteFiles() {
             const adapter = adapters[syncMode];
@@ -971,6 +982,7 @@
                 syncState[key] = { rev: remote.rev, base: remote.text };
                 persistSync();
                 allTasks = remote.text.split('\n');
+                loadedKey = key;
                 existingProjects.clear();
                 existingContexts.clear();
                 allTasks.forEach(t => {
@@ -988,8 +1000,9 @@
         // Record the whole current file as unsaved, then push it.
         function saveRemote() {
             const key = syncKey(currentFile);
-            // Refuse to save a file that was never loaded from this backend: an empty list could overwrite it
-            if (!syncState[key] && !pendingWrites.has(key)) { setStatus('Not loaded yet, changes not saved'); return; }
+            // Refuse to save unless allTasks really came from this file in this page-life. syncState alone is not
+            // proof: it is restored from localStorage, so an empty, never-loaded list could overwrite the remote file.
+            if (loadedKey !== key) { setStatus('Not loaded yet, changes not saved'); return; }
             pendingWrites.set(key, allTasks.join('\n'));
             persistSync();
             return flushRemote();
@@ -1055,6 +1068,7 @@
             pendingWrites.set(key, merged.join('\n'));
             if (mode === syncMode && path === currentFile) {
                 allTasks = merged;
+                loadedKey = key;
                 render();
                 setStatus('Merged changes from another device');
             }
@@ -1560,7 +1574,11 @@
             document.getElementById('activeFileNameDisplay').innerText = cleanName; 
             list.innerHTML = knownFiles.map(f => `<div onclick="switchFile('${f}')" class="p-2 rounded cursor-pointer text-[10px] font-black uppercase transition-all ${f === currentFile ? 'file-active' : 'text-muted hover:bg-white/5'}">${f === '/todo.txt' ? 'todo.txt' : f.replace('/todo_', '').replace('.txt', '')}</div>`).join(''); 
         }
-        async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; updateFileUI(); await loadTasks(); if(document.getElementById('sidebar').classList.contains('sidebar-open')) toggleSidebar(); }
+        async function switchFile(path) { if (path === currentFile) return; resetFilters(); currentFile = path; localStorage.setItem('last_todo_file', path); allTasks = []; loadedKey = null;
+            // loadRemote() skips files with unsaved edits, so show those edits instead of leaving an empty list
+            const pendingKey = syncKey(path);
+            if (isRemoteMode() && pendingWrites.has(pendingKey)) { allTasks = pendingWrites.get(pendingKey).split('\n'); loadedKey = pendingKey; }
+            updateFileUI(); await loadTasks(); if(document.getElementById('sidebar').classList.contains('sidebar-open')) toggleSidebar(); }
         function showFileManager() { document.getElementById('fileManagerOverlay').classList.remove('hidden'); renderBulkList(); }
         function hideFileManager() { document.getElementById('fileManagerOverlay').classList.add('hidden'); }
         function renderBulkList() {
