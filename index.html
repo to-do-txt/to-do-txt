@@ -98,7 +98,7 @@
         /* --- WYSIWYG Print Styling --- */
         @media print {
             /* Hide the UI chrome completely */
-            header, aside, #bulkEditArea, #fileManagerOverlay { 
+            header, aside, #syncBanner, #bulkEditArea, #fileManagerOverlay { 
                 display: none !important; 
             }
             
@@ -195,11 +195,11 @@
                 </div>
             </div>
             <div class="flex items-start gap-2">
-                <input type="text" id="searchInput" oninput="render()" placeholder="Search" class="w-28 sm:w-48 shrink-0 input-bg border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
+                <input type="text" id="searchInput" onfocus="hideFileManager()" oninput="render()" placeholder="Search" class="w-28 sm:w-48 shrink-0 input-bg border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
                 <div class="relative flex-1 min-w-0 flex flex-col">
                     <div class="flex gap-2">
-                        <input type="text" id="newTodo" autocomplete="off" oninput="handleInputAutocomplete(this, 'autocompleteDropdown')" onkeydown="handleInputKeyDown(event)" placeholder="Add a task…" class="flex-1 min-w-0 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
-                        <button onclick="addTask()" class="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg font-bold text-sm text-white transition-colors">Add</button>
+                        <input type="text" id="newTodo" autocomplete="off" onfocus="hideFileManager()" oninput="handleInputAutocomplete(this, 'autocompleteDropdown')" onkeydown="handleInputKeyDown(event)" placeholder="Add a task…" class="flex-1 min-w-0 input-bg border rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-500">
+                        <button onclick="addTask()" id="addTaskBtn" class="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-2 rounded-lg font-bold text-sm text-white transition-colors">Add</button>
                     </div>
                     <div id="autocompleteDropdown" class="hidden absolute left-0 right-0 top-full mt-1 card-bg border rounded-lg shadow-xl max-h-48 overflow-y-auto z-[200] p-1 space-y-0.5"></div>
                 </div>
@@ -207,6 +207,12 @@
             </div>
         </div>
     </header>
+
+    <!-- Connection state. The header status text is hidden on phones, so this is where it shows up there. -->
+    <div id="syncBanner" class="hidden" role="status" aria-live="polite">
+        <span id="syncBannerMsg" class="flex-1"></span>
+        <button id="syncBannerBtn" class="hidden btn-toggle active px-3 py-2 shrink-0"></button>
+    </div>
 
     <div class="app-grid">
         <aside id="sidebar" class="card-bg border-r overflow-hidden flex flex-col">
@@ -485,6 +491,7 @@
             localStorage.setItem('sync_mode', mode);
             allTasks = [];   // the list still belongs to the previous backend until the new one loads
             loadedKey = null;
+            hideFileManager();
             render();
             updateSyncModeUI();
 
@@ -512,6 +519,7 @@
         }
 
         function updateSyncModeUI() {
+            updateSyncBanner();
             const dropboxBtn = document.getElementById('modeBtnDropbox');
             const gdriveBtn = document.getElementById('modeBtnGdrive');
             const localBtn = document.getElementById('modeBtnLocal');
@@ -927,6 +935,7 @@
                 return false;
             }
             gConnecting = true;
+            updateSyncBanner();
             try {
                 await waitForGis();
                 gToken = await requestGdriveToken(interactive ? '' : 'none');
@@ -1366,6 +1375,7 @@
         function deleteTask(i) { if(confirm("Delete?")) { allTasks.splice(i, 1); render(); saveTasks(); } }
         
         function addTask() { 
+            if (isBlocked()) return;
             const inp = document.getElementById('newTodo'); 
             if (!inp.value.trim()) return; 
             let val = inp.value.trim(); 
@@ -1386,6 +1396,7 @@
 
             inp.value = ""; 
             hideAutocomplete('autocompleteDropdown');
+            hideFileManager();
             render(); 
             saveTasks(); 
         }
@@ -1537,7 +1548,7 @@
             document.getElementById('toggleTopBtn').classList.toggle('active', addToTop);
         }
 
-        function toggleBulkEdit() { editingBulk = !editingBulk; document.getElementById('todoList').classList.toggle('hidden', editingBulk); document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk); if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n'); else render(); }
+        function toggleBulkEdit() { if (!editingBulk && isBlocked()) return; editingBulk = !editingBulk; document.getElementById('todoList').classList.toggle('hidden', editingBulk); document.getElementById('bulkEditArea').classList.toggle('hidden', !editingBulk); if (editingBulk) document.getElementById('bulkInput').value = allTasks.join('\n'); else render(); }
         function saveBulk() { allTasks = document.getElementById('bulkInput').value.split('\n'); toggleBulkEdit(); saveTasks(); }
         
         function exportFile() {
@@ -1562,7 +1573,64 @@
         }
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }
-        function setStatus(t, a) { document.getElementById('statusText').innerText = t; document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${a?'bg-blue-500 animate-pulse':'bg-green-600'}`; }
+        let statusActive = false;
+        function setStatus(t, a) { document.getElementById('statusText').innerText = t; statusActive = !!a; updateSyncBanner(); }
+
+        // True while the in-memory list can't be trusted to match the file: not loaded yet, not connected, no folder.
+        // Edits are refused in this state (see saveRemote), so the Add box is disabled instead of silently dropping them.
+        function isBlocked() {
+            return syncMode === 'local' ? !localDirHandle : loadedKey !== syncKey(currentFile);
+        }
+
+        // Shows the connection state under the header, gates the Add box, and colours the status dot.
+        // Green only means "synced"; amber/red means something needs attention.
+        function updateSyncBanner() {
+            const bar = document.getElementById('syncBanner');
+            if (!bar) return null;
+            const msg = document.getElementById('syncBannerMsg'), btn = document.getElementById('syncBannerBtn');
+            const status = document.getElementById('statusText').innerText;
+            const blocked = isBlocked();
+            let text = '', tone = null, label = '', action = null;
+            if (isRemoteMode()) {
+                const name = syncMode === 'gdrive' ? 'Google Drive' : 'Dropbox';
+                if (syncMode === 'gdrive' && gConnecting) {
+                    text = 'Connecting to Google Drive…'; tone = 'info';
+                } else if (!adapters[syncMode].ready()) {
+                    if (syncMode === 'gdrive') {
+                        tone = 'warn'; label = 'Connect'; action = connectGdriveAndLoad;
+                        text = blocked ? "Google Drive isn't connected, so your list can't load yet."
+                                       : 'Google Drive is disconnected. Your edits are kept on this device and sync once you reconnect.';
+                    }
+                } else if (blocked) {
+                    if (/error|fail/i.test(status)) { tone = 'warn'; text = `Couldn't load your list from ${name}.`; label = 'Retry'; action = () => loadRemote(); }
+                    else { tone = 'info'; text = `Loading your list from ${name}…`; }
+                }
+            }
+            bar.className = text
+                ? 'px-4 py-2 md:px-6 border-b text-sm flex items-center gap-3 ' + (tone === 'warn' ? 'border-orange-400/40 bg-orange-400/10 text-orange-400' : 'border-blue-400/30 bg-blue-400/10 text-blue-400')
+                : 'hidden';
+            if (text) {
+                msg.textContent = text;
+                btn.textContent = label;
+                btn.onclick = action;
+                btn.classList.toggle('hidden', !action);
+            }
+
+            const input = document.getElementById('newTodo'), addBtn = document.getElementById('addTaskBtn');
+            if (input) {
+                input.disabled = blocked;
+                input.placeholder = !blocked ? 'Add a task…'
+                    : !syncMode ? 'Choose a sync method first'
+                    : syncMode === 'local' ? 'Connect a folder to add tasks'
+                    : 'Waiting for your list to load…';
+            }
+            if (addBtn) addBtn.disabled = blocked;
+
+            const bad = tone === 'warn' || /error|fail|offline|not loaded|not connected|tap |expired|denied|needs|pending/i.test(status);
+            const colour = statusActive ? 'bg-blue-500 animate-pulse' : bad ? 'bg-red-500' : !syncMode ? 'bg-gray-600' : 'bg-green-600';
+            document.getElementById('syncIndicator').className = `w-2 h-2 rounded-full ${colour}`;
+            return tone;
+        }
         
         function handleAuth() { 
             window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`; 
