@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-title" content="to-do-txt">
     <link rel="icon" type="image/png" sizes="64x64" href="assets/todo_txt_icon_64x64.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-    <title>to-do-txt v4.9.0</title>
+    <title>to-do-txt v4.10.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -248,7 +248,7 @@
             </div>
             <div class="p-6 border-t border-gray-800 bg-black/20">
                 <div class="flex justify-between items-center">
-                    <span class="text-[9px] font-black uppercase opacity-40">v4.9.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
+                    <span class="text-[9px] font-black uppercase opacity-40">v4.10.0 | <a href="https://github.com/to-do-txt/to-do-txt" target="_blank" class="hover:text-blue-500">GitHub</a></span>
                     <button onclick="hardLogout()" class="px-4 py-1 border border-red-900/50 text-red-500 text-[10px] font-black uppercase rounded">Logout</button>
                 </div>
             </div>
@@ -1210,7 +1210,7 @@
 
             document.getElementById('viewCounter').innerText = `${displayTasks.filter(t=>!t.meta.isHeader && t.text.trim()).length}/${allTasks.filter(t=>!t.startsWith('x ') && !t.startsWith('#') && t.trim()).length}`;
             
-            list.innerHTML = displayTasks.map(item => {
+            list.innerHTML = exampleCardHtml() + displayTasks.map(item => {
                 if (!item.text.trim()) return ""; 
                 if (item.meta.isHeader) return `<div class="${item.text.match(/^#+/)[0].length === 1 ? 'h1-style' : 'h2-style'}">${item.text.replace(/^#+\s*/, '')}</div>`;
                 
@@ -1428,8 +1428,8 @@
             const dropdown = document.getElementById(targetDropdownId);
             dropdown.innerHTML = matches.map((match, idx) => {
                 const colorClass = prefix === '+' ? 'text-blue-400' : 'text-green-400';
-                return `<div onclick="selectAutocomplete('${match}', '${inputEl.id}', '${targetDropdownId}')" class="p-2 text-xs font-mono font-bold cursor-pointer hover:bg-white/5 rounded ${colorClass} transition-all ${idx === 0 ? 'bg-white/5' : ''}" data-value="${match}">
-                    ${match} <span class="text-gray-600 text-[10px] float-right uppercase font-sans tracking-widest pt-0.5">Tab ⇥</span>
+                return `<div onmousedown="event.preventDefault()" onclick="selectAutocomplete('${match}', '${inputEl.id}', '${targetDropdownId}')" class="p-2 text-xs font-mono font-bold cursor-pointer hover:bg-white/5 rounded ${colorClass} transition-all ${idx === 0 ? 'bg-white/5' : ''}" data-value="${match}">
+                    ${match} <span class="hidden md:inline text-gray-600 text-[10px] float-right uppercase font-sans tracking-widest pt-0.5">Tab ⇥</span>
                 </div>`;
             }).join('');
             
@@ -1570,6 +1570,25 @@
         function closeViewMenu() {
             document.getElementById('viewMenu').classList.add('hidden');
             document.getElementById('viewMenuBtn').setAttribute('aria-expanded', 'false');
+        }
+
+        // Shown only when the list has no tasks. Nothing is saved until the user taps the button.
+        const EXAMPLE_TASK = '(A) Call mom +Project @context example';
+        function exampleCardHtml() {
+            if (allTasks.some(t => t.trim())) return '';
+            return `<div class="p-4 mb-2 border border-dashed rounded-lg text-center space-y-2">
+                <div class="text-[10px] font-black uppercase tracking-widest text-gray-500">Example task</div>
+                <div class="text-sm font-mono">${EXAMPLE_TASK}</div>
+                <div class="text-xs text-gray-500">(A) sets priority, +Project groups tasks, @context is where you can do it.</div>
+                <button onclick="addExampleTask()" class="btn-toggle active px-3 py-2">Add to my list</button>
+            </div>`;
+        }
+        function addExampleTask() {
+            allTasks = [EXAMPLE_TASK];
+            (EXAMPLE_TASK.match(/\+[\w\-]+/g) || []).forEach(p => existingProjects.add(p));
+            (EXAMPLE_TASK.match(/@[\w\-]+/g) || []).forEach(c => existingContexts.add(c));
+            render();
+            saveTasks();
         }
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-open'); }

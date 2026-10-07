@@ -1,5 +1,5 @@
 // Offline support for to-do-txt. Bump CACHE with every release so installed copies pick up new files.
-const CACHE = 'to-do-txt-4.9.0';
+const CACHE = 'to-do-txt-4.10.0';
 
 const APP_SHELL = [
     './',

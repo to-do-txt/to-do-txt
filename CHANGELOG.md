@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.10.0] - 2026-10-05
+
+### Added
+- **Example task** on an empty list: shows `(A) Call mom +Project @context example` as a preview. Nothing is saved until you tap **Add to my list**.
+
+### Changed
+- **Phone suggestions:** tapping a +project or @context suggestion completes it and keeps the keyboard open. The "Tab ⇥" hint now shows only on desktop.
+
 ## [4.9.0] - 2026-10-05
 
 ### Added

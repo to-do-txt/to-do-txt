@@ -93,7 +93,7 @@ Limitations: Google Drive access is granted per file the app created, so files y
 
 * **Clean Links:** Typing `link:https://google.com` inside a row hides the lengthy raw text line and formats a clean, clickable, bold **link ↗** button that opens safely inside a secondary browser tab.
 * **Mobile App Integration:** Install to your home screen (see [Install as an App](#-install-as-an-app)) to run **to-do-txt** full screen, without browser bars. Local Folder sync isn't available on iOS/Android browsers today, so use Dropbox or Google Drive on mobile.
-* **Keyboard Navigation:** While interacting with auto-complete containers inside input nodes, click or hit `Tab ⇥` to fast-track keyword tag strings.
+* **Keyboard Navigation:** While typing a `+project` or `@context`, press `Tab ⇥` on a keyboard, or tap a suggestion on a phone, to complete it.
 * **Switching Backends Mid-Project:** Moving from Dropbox to Local Folder (or back) doesn't migrate your files automatically — use the **Backup** button first if you want a copy of your current task list to bring along.
 
 ## ⚖️ License & Disclaimer
